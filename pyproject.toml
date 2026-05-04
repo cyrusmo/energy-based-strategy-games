@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "energy-strategy-games"
+version = "0.1.0"
+description = "Energy-based strategy generation with game-theoretic evaluation for robust multi-agent reasoning."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Research Scaffold Contributors" }]
+dependencies = [
+  "numpy>=1.24",
+  "torch>=2.0",
+  "PyYAML>=6.0",
+  "matplotlib>=3.7",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=7.4",
+  "ruff>=0.4",
+  "mypy>=1.8",
+  "ipykernel>=6.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true

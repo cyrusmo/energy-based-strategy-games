@@ -1,0 +1,17 @@
+seed: 11
+
+env:
+  grid_size: 10
+  max_steps: 50
+  attacker_start: [0, 0]
+  defender_start: [9, 9]
+  goal_pos: [9, 0]
+  catch_radius: 0
+
+ppo:
+  status: scaffold
+  total_steps: 10000
+  learning_rate: 0.0003
+  gamma: 0.99
+  gae_lambda: 0.95
+  clip_range: 0.2
