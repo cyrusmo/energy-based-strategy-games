@@ -22,6 +22,7 @@ Initial baselines:
 - Direct-to-goal heuristic attacker
 - Gaussian latent strategy sampler
 - PPO baseline scaffold
+- Lightweight strategy-conditioned policy-gradient update
 
 Planned baselines:
 
@@ -61,7 +62,22 @@ Near-term ablations:
 - With vs without robustness-aware selection
 - Number of candidate strategies per iteration
 - Number and type of sampled opponent responses
+- With vs without world-model fitting
+- Lightweight REINFORCE update vs PPO
 
 ## Reporting Standard
 
 Public reports should state whether metrics are exact or approximate. The current `exploitability_proxy` should not be presented as true Nash exploitability.
+
+## Public Artifacts
+
+Config-driven runs can write public artifacts under `outputs/public/`:
+
+- `iterations.jsonl`: one JSON object per training iteration
+- `metrics.json`: aggregate run metrics and final update losses
+- `config.yaml`: saved config snapshot
+- `trace.txt`: line-oriented rollout trace for public demos
+- `trajectory.png`: simple grid path visualization
+- `matrix.json`: named strategy-vs-opponent payoff matrix
+
+Generated demo artifacts are ignored by default so curated results can be promoted deliberately.

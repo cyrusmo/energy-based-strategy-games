@@ -23,7 +23,7 @@ Current implementation:
 
 ## Strategy-Conditioned Policy
 
-The policy receives an encoded environment state and a latent strategy embedding, then outputs action logits. The current policy is intentionally small and untrained in the debug loop.
+The policy receives an encoded environment state and a latent strategy embedding, then outputs action logits. The Day 2 loop applies a minimal REINFORCE-style update from collected rollout log-probabilities. This is useful for proving the training path is live, but it is not a replacement for a careful PPO implementation.
 
 Current implementation:
 
@@ -32,7 +32,7 @@ Current implementation:
 
 ## World Model
 
-The world model is a clean interface for future learned transition and reward prediction. The first evaluator uses true environment rollouts, while the world model remains a placeholder.
+The world model is a clean interface for learned transition and reward prediction. The first evaluator still uses true environment rollouts. The Day 2 training loop fits the world model on observed one-step transitions, leaving imaginary rollout evaluation as a future extension.
 
 Current implementation:
 
@@ -49,9 +49,18 @@ Current implementation:
 
 ## Experiment Runner
 
-The experiment runner loads YAML configs and executes a small Generate -> Evaluate -> Execute -> Update loop. It is intended to make early experiments reproducible before deeper training code is added.
+The experiment runner loads YAML configs and executes a small Generate -> Evaluate -> Execute -> Update loop. It records selection metrics, rollout summaries, candidate diversity, and update losses for the policy, EBM, and world model. When config logging is enabled, it writes a public run directory containing `iterations.jsonl`, `metrics.json`, and `config.yaml`.
 
 Current implementation:
 
 - `strategy_games.experiments.runner.run_from_config`
 - `strategy_games.training.train_loop.run_training_loop`
+
+## Observability and Evaluation Harness
+
+The Day 3-7 harness adds public tooling around the training loop:
+
+- Experiment logging for reproducible run artifacts
+- Rollout traces and matplotlib grid path plots
+- Baseline comparison across random, direct-goal, and strategy-loop methods
+- Payoff matrices for named strategy-vs-opponent heuristic evaluation

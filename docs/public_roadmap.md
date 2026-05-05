@@ -10,14 +10,18 @@ This repository is currently a research scaffold for early experiments in energy
 - Langevin sampler
 - Approximate sampled-response evaluator
 - Strategy buffer
-- Debug training loop
+- Debug training loop with lightweight policy, EBM, and world-model updates
+- Public experiment logging
+- Rollout trace and path visualization
+- Baseline comparison harness
+- Named-strategy payoff matrix
 - Unit and smoke tests
 
 ## Near Term
 
-- Implement policy optimization for the strategy-conditioned policy
-- Train the EBM from buffer positives and sampler negatives
-- Add richer rollout logging and visualization
+- Replace the lightweight policy update with a tested PPO baseline
+- Improve EBM training from buffer positives and sampler negatives
+- Add richer rollout logging and visualization summaries
 - Add held-out gridworld layouts
 - Implement clean PPO baseline
 - Add simple payoff-matrix experiments

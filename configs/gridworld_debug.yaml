@@ -13,10 +13,24 @@ training:
   candidate_strategies: 5
   strategy_dim: 8
 
+policy:
+  hidden_dim: 32
+
 ebm:
   hidden_dim: 32
   langevin_steps: 5
   langevin_step_size: 0.02
 
+world_model:
+  hidden_dim: 32
+
 evaluator:
   episodes_per_opponent: 1
+
+updates:
+  policy_lr: 0.003
+  ebm_lr: 0.001
+  world_model_lr: 0.001
+  gamma: 0.99
+  entropy_coef: 0.01
+  ebm_batch_size: 4

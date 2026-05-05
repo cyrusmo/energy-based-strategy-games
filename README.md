@@ -38,9 +38,13 @@ pytest
 python examples/run_gridworld_baseline.py
 python examples/sample_strategies.py
 python examples/evaluate_strategy.py
+python examples/run_training_loop.py --config configs/gridworld_day3.yaml
+python examples/visualize_rollout.py
+python examples/compare_baselines.py
+python examples/compute_payoff_matrix.py
 ```
 
-Expected outputs are small JSON-like metric dictionaries, sampled strategy shapes and energies, and evaluator summaries for named strategies. The commands are designed to finish quickly on CPU.
+Expected outputs are small JSON-like metric dictionaries, sampled strategy shapes and energies, evaluator summaries for named strategies, a short training-loop history, public artifact files under `outputs/public/`, a rollout trace PNG, a baseline metric table, and a named-strategy payoff matrix. The commands are designed to finish quickly on CPU.
 
 ## Key Metrics
 
@@ -60,21 +64,22 @@ Public surfaces should include clean architecture, reproducible toy experiments,
 
 Private surfaces should include messy scratch notebooks, interview-specific positioning, unvalidated claims, large raw rollout dumps, proprietary datasets, compute logs, failed experiment archaeology, and any future non-public partner data.
 
-The `.gitignore` protects `notebooks/private/`, `experiments/private/`, `data/private/`, `reports/private/`, `.env`, `private_config/`, private outputs, model checkpoints, and common experiment tracking directories.
+The `.gitignore` protects `notebooks/private/`, `experiments/private/`, `data/private/`, `reports/private/`, `.env`, `private_config/`, private outputs, model checkpoints, and common experiment tracking directories. Generated public demo artifacts under `outputs/public/` are ignored by default except for the placeholder directory.
 
 ## Current Status
 
-This is a research scaffold and early-stage experimental framework. It does not claim state-of-the-art performance, convergence guarantees, or exact equilibrium computation. The current gridworld and evaluator are intentionally simple so the Generate -> Evaluate -> Execute -> Update loop can be inspected and tested end to end.
+This is a research scaffold and early-stage experimental framework. It does not claim state-of-the-art performance, convergence guarantees, or exact equilibrium computation. The current gridworld and evaluator are intentionally simple so the Generate -> Evaluate -> Execute -> Update loop can be inspected and tested end to end. The Day 2 loop includes lightweight REINFORCE-style policy updates, contrastive EBM updates, and one-step world-model fitting. The Day 3-7 harness adds public logging, rollout visualization, baseline comparison, and payoff-matrix evaluation. It is still not a full PPO/PSRO/world-model planning system.
 
 ## Research Roadmap
 
-- Implement real policy optimization for the strategy-conditioned policy.
-- Train the EBM from high-performing strategy buffer samples.
-- Add a learned world model for imaginary strategy evaluation.
+- Replace the lightweight policy-gradient update with a tested PPO baseline.
+- Improve EBM training with better negative sampling and replay schedules.
+- Use the learned world model for imaginary strategy evaluation.
 - Expand game-theoretic evaluation beyond sampled heuristic responses.
 - Add held-out grid layouts for zero-shot transfer and robustness tests.
 - Compare against PPO, heuristic policies, Gaussian latent strategies, and PSRO-style strategy populations.
 - Add richer visualizations for strategy embeddings, payoff matrices, and rollout traces.
+- Promote selected public artifacts into versioned reports once experiments are stable.
 
 ## Citation / Related Work
 

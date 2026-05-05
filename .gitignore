@@ -7,6 +7,9 @@ private_config/
 wandb/
 mlruns/
 outputs/private/
+outputs/public/**
+!outputs/public/
+!outputs/public/.gitkeep
 *.pt
 *.pth
 *.ckpt
