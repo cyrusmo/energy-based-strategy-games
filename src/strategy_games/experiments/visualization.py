@@ -1,9 +1,17 @@
 """Rollout trace collection and simple gridworld visualization."""
 
+# ruff: noqa: E402
+
 from __future__ import annotations
 
 from dataclasses import dataclass
+import os
 from pathlib import Path
+
+os.environ.setdefault("MPLCONFIGDIR", "/tmp/strategy_games_mplconfig")
+os.environ.setdefault("XDG_CACHE_HOME", "/tmp/strategy_games_cache")
+Path(os.environ["MPLCONFIGDIR"]).mkdir(parents=True, exist_ok=True)
+Path(os.environ["XDG_CACHE_HOME"]).mkdir(parents=True, exist_ok=True)
 
 import matplotlib
 

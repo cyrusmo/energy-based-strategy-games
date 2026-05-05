@@ -1,7 +1,10 @@
 import json
 
+import yaml
+
 from strategy_games.envs.gridworld import GridworldConfig
 from strategy_games.experiments.logging import ExperimentLogger, summarize_training_result
+from strategy_games.experiments.runner import run_from_config
 from strategy_games.training.train_loop import TrainingConfig, run_training_loop
 
 
@@ -45,3 +48,42 @@ def test_experiment_logger_outputs_expected_files(tmp_path) -> None:
     }
     assert required.issubset(metrics)
     assert metrics == summarize_training_result(result)
+
+
+def test_runner_writes_logging_artifacts_from_config(tmp_path) -> None:
+    config_path = tmp_path / "logged_config.yaml"
+    output_dir = tmp_path / "outputs"
+    config = {
+        "seed": 9,
+        "env": {
+            "grid_size": 5,
+            "max_steps": 8,
+            "attacker_start": [0, 0],
+            "defender_start": [4, 4],
+            "goal_pos": [4, 0],
+            "catch_radius": 0,
+        },
+        "training": {
+            "iterations": 1,
+            "candidate_strategies": 2,
+            "strategy_dim": 4,
+        },
+        "policy": {"hidden_dim": 8},
+        "ebm": {"hidden_dim": 8, "langevin_steps": 1, "langevin_step_size": 0.02},
+        "world_model": {"hidden_dim": 8},
+        "evaluator": {"episodes_per_opponent": 1},
+        "updates": {"ebm_batch_size": 2},
+        "logging": {
+            "output_dir": str(output_dir),
+            "run_name": "logged_run",
+            "enabled": True,
+        },
+    }
+    config_path.write_text(yaml.safe_dump(config), encoding="utf-8")
+
+    result = run_from_config(config_path)
+    artifacts = result["artifacts"]
+    assert artifacts["run_dir"] == str(output_dir / "logged_run")
+    assert (output_dir / "logged_run" / "iterations.jsonl").exists()
+    assert (output_dir / "logged_run" / "metrics.json").exists()
+    assert (output_dir / "logged_run" / "config.yaml").exists()
