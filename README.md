@@ -66,14 +66,6 @@ Expected outputs are small JSON-like metric dictionaries, sampled strategy shape
 - **zero-shot transfer:** planned metric for evaluating strategies against held-out maps, goals, opponent policies, or environment perturbations.
 - **benchmark summary:** mean/std return, rates, sampled-response metrics where applicable, strategy diversity, and wall-clock time per environment/baseline.
 
-## What Is Public vs Private?
-
-Public surfaces should include clean architecture, reproducible toy experiments, core algorithmic scaffolding, public experiment results, demo notebooks, and roadmap-level research claims.
-
-Private surfaces should include messy scratch notebooks, interview-specific positioning, unvalidated claims, large raw rollout dumps, proprietary datasets, compute logs, failed experiment archaeology, and any future non-public partner data.
-
-The `.gitignore` protects `notebooks/private/`, `experiments/private/`, `data/private/`, `reports/private/`, `.env`, `private_config/`, private outputs, model checkpoints, and common experiment tracking directories. Generated public demo artifacts under `outputs/public/` are ignored by default except for the placeholder directory.
-
 ## Current Status
 
 This is a research scaffold and early-stage experimental framework. It does not claim state-of-the-art performance, convergence guarantees, or exact equilibrium computation. The current gridworld and evaluator are intentionally simple so the Generate -> Evaluate -> Execute -> Update loop can be inspected and tested end to end. The Day 2 loop includes lightweight REINFORCE-style policy updates, contrastive EBM updates, and one-step world-model fitting. The Day 3-7 harness adds public logging, rollout visualization, baseline comparison, payoff-matrix evaluation, and a benchmark runner. PettingZoo Pursuit is available as an optional transfer benchmark, not a replacement for the custom research gridworld.
