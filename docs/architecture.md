@@ -64,3 +64,6 @@ The Day 3-7 harness adds public tooling around the training loop:
 - Rollout traces and matplotlib grid path plots
 - Baseline comparison across random, direct-goal, and strategy-loop methods
 - Payoff matrices for named strategy-vs-opponent heuristic evaluation
+- Benchmark registry and adapters for custom gridworld and optional PettingZoo Pursuit runs
+
+Benchmark adapters expose a comparable result schema while preserving environment-specific semantics. The custom gridworld remains the primary research environment; PettingZoo Pursuit is a secondary transfer benchmark behind an optional dependency.

@@ -15,6 +15,8 @@ This repository is currently a research scaffold for early experiments in energy
 - Rollout trace and path visualization
 - Baseline comparison harness
 - Named-strategy payoff matrix
+- Benchmark registry and runner for custom gridworld seed sweeps
+- Optional PettingZoo Pursuit adapter for transfer benchmarking
 - Unit and smoke tests
 
 ## Near Term
@@ -24,6 +26,7 @@ This repository is currently a research scaffold for early experiments in energy
 - Add richer rollout logging and visualization summaries
 - Add held-out gridworld layouts
 - Implement clean PPO baseline
+- Add benchmark reports for seed sweeps without overclaiming performance
 - Add simple payoff-matrix experiments
 
 ## Medium Term

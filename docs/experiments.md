@@ -14,6 +14,8 @@ Default setup:
 - Goal: `(9, 0)`
 - Terminal conditions: goal reached, defender catch, or max steps
 
+The custom gridworld remains the primary debug and research environment. PettingZoo SISL Pursuit can be installed as an optional transfer benchmark with `pip install -e ".[bench]"`.
+
 ## Baselines
 
 Initial baselines:
@@ -44,6 +46,8 @@ Core metrics:
 - `robustness_score`
 - `exploitability_proxy`
 - `strategy_diversity`
+- `wall_clock_seconds`
+- `survival_or_capture_rate`
 
 Planned metrics:
 
@@ -81,3 +85,13 @@ Config-driven runs can write public artifacts under `outputs/public/`:
 - `matrix.json`: named strategy-vs-opponent payoff matrix
 
 Generated demo artifacts are ignored by default so curated results can be promoted deliberately.
+
+## Benchmarks
+
+Benchmark configs live under `configs/benchmarks/` and write artifacts to `outputs/public/benchmarks/`:
+
+- `custom_gridworld.yaml`: seed sweep for the custom attacker-defender environment
+- `debug_suite.yaml`: tiny benchmark used for quick local validation
+- `pettingzoo_pursuit.yaml`: optional external pursuit/evasion benchmark
+
+Benchmark rows use a shared schema across adapters: environment id, baseline, seed, return, win/goal/catch/timeout rates, survival or capture rate, steps, strategy label, sampled-response metrics when available, strategy diversity, and wall-clock time. PettingZoo rows intentionally use proxy fields where the task semantics differ from the custom attacker-goal game.

@@ -1,0 +1,32 @@
+suite:
+  name: custom_gridworld_benchmark
+  output_dir: outputs/public/benchmarks
+  run_name: custom_gridworld
+  write_artifacts: true
+
+benchmarks:
+  - env_id: custom_gridworld_v0
+    seeds: [0, 1, 2]
+    baselines:
+      - random_policy
+      - direct_goal_heuristic
+      - strategy_loop
+    env:
+      grid_size: 10
+      max_steps: 35
+      attacker_start: [0, 0]
+      defender_start: [9, 9]
+      goal_pos: [9, 0]
+      catch_radius: 0
+    training:
+      iterations: 3
+      candidate_strategies: 6
+      strategy_dim: 8
+    ebm:
+      hidden_dim: 64
+      langevin_steps: 8
+      langevin_step_size: 0.02
+    evaluator:
+      episodes_per_opponent: 1
+    updates:
+      ebm_batch_size: 8

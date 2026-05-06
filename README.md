@@ -29,7 +29,13 @@ flowchart LR
 pip install -e ".[dev]"
 ```
 
-Python 3.11+ is required. The first scaffold uses PyTorch, NumPy, PyYAML, pytest, and matplotlib only.
+Python 3.11+ is required. The default scaffold uses PyTorch, NumPy, PyYAML, pytest, and matplotlib only.
+
+Optional external pursuit benchmarks use PettingZoo SISL:
+
+```bash
+pip install -e ".[bench]"
+```
 
 ## Quickstart
 
@@ -42,6 +48,7 @@ python examples/run_training_loop.py --config configs/gridworld_day3.yaml
 python examples/visualize_rollout.py
 python examples/compare_baselines.py
 python examples/compute_payoff_matrix.py
+python examples/run_benchmarks.py --config configs/benchmarks/debug_suite.yaml
 ```
 
 Expected outputs are small JSON-like metric dictionaries, sampled strategy shapes and energies, evaluator summaries for named strategies, a short training-loop history, public artifact files under `outputs/public/`, a rollout trace PNG, a baseline metric table, and a named-strategy payoff matrix. The commands are designed to finish quickly on CPU.
@@ -57,6 +64,7 @@ Expected outputs are small JSON-like metric dictionaries, sampled strategy shape
 - **exploitability_proxy:** approximate vulnerability to sampled best responses. This is not exact Nash exploitability.
 - **strategy_diversity:** mean pairwise distance between latent strategy embeddings.
 - **zero-shot transfer:** planned metric for evaluating strategies against held-out maps, goals, opponent policies, or environment perturbations.
+- **benchmark summary:** mean/std return, rates, sampled-response metrics where applicable, strategy diversity, and wall-clock time per environment/baseline.
 
 ## What Is Public vs Private?
 
@@ -68,7 +76,7 @@ The `.gitignore` protects `notebooks/private/`, `experiments/private/`, `data/pr
 
 ## Current Status
 
-This is a research scaffold and early-stage experimental framework. It does not claim state-of-the-art performance, convergence guarantees, or exact equilibrium computation. The current gridworld and evaluator are intentionally simple so the Generate -> Evaluate -> Execute -> Update loop can be inspected and tested end to end. The Day 2 loop includes lightweight REINFORCE-style policy updates, contrastive EBM updates, and one-step world-model fitting. The Day 3-7 harness adds public logging, rollout visualization, baseline comparison, and payoff-matrix evaluation. It is still not a full PPO/PSRO/world-model planning system.
+This is a research scaffold and early-stage experimental framework. It does not claim state-of-the-art performance, convergence guarantees, or exact equilibrium computation. The current gridworld and evaluator are intentionally simple so the Generate -> Evaluate -> Execute -> Update loop can be inspected and tested end to end. The Day 2 loop includes lightweight REINFORCE-style policy updates, contrastive EBM updates, and one-step world-model fitting. The Day 3-7 harness adds public logging, rollout visualization, baseline comparison, payoff-matrix evaluation, and a benchmark runner. PettingZoo Pursuit is available as an optional transfer benchmark, not a replacement for the custom research gridworld.
 
 ## Research Roadmap
 
@@ -80,7 +88,8 @@ This is a research scaffold and early-stage experimental framework. It does not 
 - Compare against PPO, heuristic policies, Gaussian latent strategies, and PSRO-style strategy populations.
 - Add richer visualizations for strategy embeddings, payoff matrices, and rollout traces.
 - Promote selected public artifacts into versioned reports once experiments are stable.
+- Expand benchmark adapters once the custom gridworld metrics are stable across seed sweeps.
 
 ## Citation / Related Work
 
-This scaffold is motivated by ideas from Policy-Space Response Oracles (PSRO), Proximal Policy Optimization (PPO), Diversity Is All You Need (DIAYN), Counterfactual Regret Minimization (CFR), Energy-Based Models (EBMs), Dreamer-style world models, and MuZero-style planning with learned dynamics. The code currently uses these as research context rather than claiming a full implementation of each method.
+This scaffold is motivated by ideas from Policy-Space Response Oracles (PSRO), Proximal Policy Optimization (PPO), Diversity Is All You Need (DIAYN), Counterfactual Regret Minimization (CFR), Energy-Based Models (EBMs), Dreamer-style world models, MuZero-style planning with learned dynamics, and multi-agent environment standards such as PettingZoo. The code currently uses these as research context rather than claiming a full implementation of each method.

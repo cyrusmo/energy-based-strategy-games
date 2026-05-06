@@ -1,0 +1,21 @@
+suite:
+  name: pettingzoo_pursuit_benchmark
+  output_dir: outputs/public/benchmarks
+  run_name: pettingzoo_pursuit
+  write_artifacts: true
+
+benchmarks:
+  - env_id: pettingzoo_pursuit_v4
+    seeds: [0, 1]
+    baselines:
+      - random_policy
+      - direct_goal_heuristic
+      - strategy_loop
+    env:
+      max_cycles: 25
+      x_size: 8
+      y_size: 8
+      n_evaders: 4
+      n_pursuers: 2
+      obs_range: 5
+      shared_reward: true
