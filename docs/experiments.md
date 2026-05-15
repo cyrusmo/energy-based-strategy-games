@@ -14,7 +14,7 @@ Default setup:
 - Goal: `(9, 0)`
 - Terminal conditions: goal reached, defender catch, or max steps
 
-The custom gridworld remains the primary debug and research environment. PettingZoo SISL Pursuit can be installed as an optional transfer benchmark with `pip install -e ".[bench]"`.
+The custom gridworld remains the primary debug and research environment. PettingZoo Pursuit can be installed as an optional transfer benchmark with `pip install -e ".[bench]"`.
 
 ## Baselines
 
@@ -23,12 +23,12 @@ Initial baselines:
 - Uniform random attacker policy
 - Direct-to-goal heuristic attacker
 - Gaussian latent strategy sampler
-- PPO baseline scaffold
+- PPO-lite actor-critic attacker baseline
 - Lightweight strategy-conditioned policy-gradient update
 
 Planned baselines:
 
-- PPO without strategy conditioning
+- Hardened PPO without strategy conditioning
 - Strategy-conditioned PPO with random latent strategies
 - PSRO-style population baseline
 - Heuristic defender/opponent populations with held-out responses
@@ -67,7 +67,7 @@ Near-term ablations:
 - Number of candidate strategies per iteration
 - Number and type of sampled opponent responses
 - With vs without world-model fitting
-- Lightweight REINFORCE update vs PPO
+- Lightweight REINFORCE update vs PPO-lite / hardened PPO
 
 ## Reporting Standard
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import time
 from collections.abc import Mapping
 from typing import Any, Protocol
@@ -126,7 +127,7 @@ class CustomGridworldBenchmarkAdapter:
 
 
 class PettingZooPursuitBenchmarkAdapter:
-    """Optional adapter for PettingZoo SISL Pursuit."""
+    """Optional adapter for PettingZoo Pursuit."""
 
     env_id = "pettingzoo_pursuit_v4"
 
@@ -145,11 +146,13 @@ class PettingZooPursuitBenchmarkAdapter:
 
         if baseline not in {"random_policy", "direct_goal_heuristic", "strategy_loop"}:
             raise KeyError(f"Unsupported PettingZoo pursuit baseline: {baseline}")
+        os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
+        os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
         try:
             from pettingzoo.sisl import pursuit_v4
         except ModuleNotFoundError as exc:
             raise BenchmarkDependencyError(
-                "PettingZoo SISL is optional. Install with `pip install -e '.[bench]'`."
+                "PettingZoo Pursuit is optional. Install with `pip install -e '.[bench]'`."
             ) from exc
 
         start = time.perf_counter()

@@ -31,7 +31,7 @@ pip install -e ".[dev]"
 
 Python 3.11+ is required. The default scaffold uses PyTorch, NumPy, PyYAML, pytest, and matplotlib only.
 
-Optional external pursuit benchmarks use PettingZoo SISL:
+Optional external pursuit benchmarks use a narrow PettingZoo Pursuit dependency set:
 
 ```bash
 pip install -e ".[bench]"
@@ -45,13 +45,14 @@ python examples/run_gridworld_baseline.py
 python examples/sample_strategies.py
 python examples/evaluate_strategy.py
 python examples/run_training_loop.py --config configs/gridworld_day3.yaml
+python examples/train_ppo_baseline.py --config configs/gridworld_ppo_baseline.yaml
 python examples/visualize_rollout.py
 python examples/compare_baselines.py
 python examples/compute_payoff_matrix.py
 python examples/run_benchmarks.py --config configs/benchmarks/debug_suite.yaml
 ```
 
-Expected outputs are small JSON-like metric dictionaries, sampled strategy shapes and energies, evaluator summaries for named strategies, a short training-loop history, public artifact files under `outputs/public/`, a rollout trace PNG, a baseline metric table, and a named-strategy payoff matrix. The commands are designed to finish quickly on CPU.
+Expected outputs are small JSON-like metric dictionaries, sampled strategy shapes and energies, evaluator summaries for named strategies, a short training-loop history, public artifact files under `outputs/public/`, a rollout trace PNG, a PPO-lite baseline metrics file, a baseline metric table, and a named-strategy payoff matrix. The commands are designed to finish quickly on CPU.
 
 ## Key Metrics
 
@@ -68,11 +69,11 @@ Expected outputs are small JSON-like metric dictionaries, sampled strategy shape
 
 ## Current Status
 
-This is a research scaffold and early-stage experimental framework. It does not claim state-of-the-art performance, convergence guarantees, or exact equilibrium computation. The current gridworld and evaluator are intentionally simple so the Generate -> Evaluate -> Execute -> Update loop can be inspected and tested end to end. The Day 2 loop includes lightweight REINFORCE-style policy updates, contrastive EBM updates, and one-step world-model fitting. The Day 3-7 harness adds public logging, rollout visualization, baseline comparison, payoff-matrix evaluation, and a benchmark runner. PettingZoo Pursuit is available as an optional transfer benchmark, not a replacement for the custom research gridworld.
+This is a research scaffold and early-stage experimental framework. It does not claim state-of-the-art performance, convergence guarantees, or exact equilibrium computation. The current gridworld and evaluator are intentionally simple so the Generate -> Evaluate -> Execute -> Update loop can be inspected and tested end to end. The Day 2 loop includes lightweight REINFORCE-style policy updates, contrastive EBM updates, and one-step world-model fitting. The Day 3-7 harness adds public logging, rollout visualization, baseline comparison, payoff-matrix evaluation, and a benchmark runner. A first PPO-lite attacker baseline is available for the custom gridworld, but it is not yet a strong policy. PettingZoo Pursuit is available as an optional transfer benchmark, not a replacement for the custom research gridworld.
 
 ## Research Roadmap
 
-- Replace the lightweight policy-gradient update with a tested PPO baseline.
+- Harden the PPO-lite baseline and compare it against the strategy loop across seed sweeps.
 - Improve EBM training with better negative sampling and replay schedules.
 - Use the learned world model for imaginary strategy evaluation.
 - Expand game-theoretic evaluation beyond sampled heuristic responses.

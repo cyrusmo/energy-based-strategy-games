@@ -10,7 +10,7 @@ import numpy as np
 
 from strategy_games.envs.gridworld import GridworldConfig
 from strategy_games.experiments.runner import run_from_config
-from strategy_games.training.ppo_baseline import run_direct_goal_baseline, run_random_policy_baseline
+from strategy_games.training.ppo_baseline import run_direct_goal_baseline, run_random_policy_baseline, train_ppo_from_config
 
 BASELINE_FIELDS = ("baseline", "episode_return", "win_rate", "goal_rate", "catch_rate", "timeout_rate")
 
@@ -20,6 +20,8 @@ def compare_baselines(
     episodes: int = 5,
     seed: int | None = 0,
     env_config: GridworldConfig | None = None,
+    include_ppo: bool = True,
+    ppo_config_path: str | Path = "configs/gridworld_ppo_baseline.yaml",
 ) -> list[dict[str, float | str]]:
     """Return a shared metric table for public baseline comparison."""
 
@@ -33,6 +35,9 @@ def compare_baselines(
         _row("direct_goal_heuristic", direct_metrics),
         _row("day2_strategy_loop", strategy_metrics),
     ]
+    if include_ppo:
+        ppo_metrics = train_ppo_from_config(ppo_config_path)
+        rows.append(_row("ppo_baseline", ppo_metrics))
     return rows
 
 

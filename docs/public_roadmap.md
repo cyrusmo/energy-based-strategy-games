@@ -21,11 +21,11 @@ This repository is currently a research scaffold for early experiments in energy
 
 ## Near Term
 
-- Replace the lightweight policy update with a tested PPO baseline
+- Harden the PPO-lite baseline into a stronger tested PPO comparison
 - Improve EBM training from buffer positives and sampler negatives
 - Add richer rollout logging and visualization summaries
 - Add held-out gridworld layouts
-- Implement clean PPO baseline
+- Run PPO-lite seed sweeps and diagnose failure modes
 - Add benchmark reports for seed sweeps without overclaiming performance
 - Add simple payoff-matrix experiments
 

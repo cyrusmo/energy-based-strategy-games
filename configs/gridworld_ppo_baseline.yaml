@@ -9,9 +9,20 @@ env:
   catch_radius: 0
 
 ppo:
-  status: scaffold
-  total_steps: 10000
+  total_steps: 512
+  rollout_steps: 128
+  update_epochs: 4
+  minibatch_size: 64
+  hidden_dim: 64
   learning_rate: 0.0003
   gamma: 0.99
   gae_lambda: 0.95
   clip_range: 0.2
+  value_coef: 0.5
+  entropy_coef: 0.01
+  grad_clip_norm: 0.5
+  eval_episodes: 5
+
+logging:
+  output_dir: outputs/public/ppo_baseline
+  enabled: true
