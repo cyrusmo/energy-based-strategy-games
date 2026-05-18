@@ -1,0 +1,33 @@
+seed: 13
+episode_id: custom_4_evader_9x9_seed13
+
+env:
+  grid_size: [9, 9]
+  num_evaders: 4
+  num_pursuers: 2
+  max_steps: 24
+  catch_radius: 0
+  pursuer_starts:
+    - [4, 4]
+    - [4, 3]
+  evader_starts:
+    - [0, 8]
+    - [8, 8]
+    - [0, 0]
+    - [8, 0]
+  evader_goals:
+    - [8, 0]
+    - [0, 0]
+    - [8, 8]
+    - [0, 8]
+
+policies:
+  pursuer: pursuer_greedy_nearest
+  evader: evader_flee_nearest
+  feint_steps: 3
+
+output:
+  dir: outputs/public/pursuit_demo_n_evader
+  trace_filename: trace.json
+  summary_filename: summary.json
+  trajectory_filename: trajectory.png

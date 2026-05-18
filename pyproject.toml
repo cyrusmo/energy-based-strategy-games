@@ -30,6 +30,9 @@ bench = [
   "pygame-ce>=2.3.0",
   "scipy>=1.4.1",
 ]
+demo = [
+  "streamlit>=1.35",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]

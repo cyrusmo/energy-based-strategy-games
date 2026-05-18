@@ -37,6 +37,12 @@ Optional external pursuit benchmarks use a narrow PettingZoo Pursuit dependency 
 pip install -e ".[bench]"
 ```
 
+The optional pursuit trace viewer uses Streamlit:
+
+```bash
+pip install -e ".[dev,demo]"
+```
+
 ## Quickstart
 
 ```bash
@@ -50,9 +56,18 @@ python examples/visualize_rollout.py
 python examples/compare_baselines.py
 python examples/compute_payoff_matrix.py
 python examples/run_benchmarks.py --config configs/benchmarks/debug_suite.yaml
+python examples/export_pursuit_trace.py --config configs/demo/custom_2_evader_9x9.yaml
 ```
 
-Expected outputs are small JSON-like metric dictionaries, sampled strategy shapes and energies, evaluator summaries for named strategies, a short training-loop history, public artifact files under `outputs/public/`, a rollout trace PNG, a PPO-lite baseline metrics file, a baseline metric table, and a named-strategy payoff matrix. The commands are designed to finish quickly on CPU.
+Expected outputs are small JSON-like metric dictionaries, sampled strategy shapes and energies, evaluator summaries for named strategies, a short training-loop history, public artifact files under `outputs/public/`, a rollout trace PNG, a PPO-lite baseline metrics file, a baseline metric table, a named-strategy payoff matrix, and a validated pursuit/evasion `trace.json`. The commands are designed to finish quickly on CPU.
+
+To inspect a pursuit trace interactively:
+
+```bash
+streamlit run examples/pursuit_trace_viewer.py
+```
+
+This viewer is intended for inspecting environment dynamics, scripted policy behavior, and trace-level metrics. It does not demonstrate learned robustness, optimality, or exact game-theoretic guarantees.
 
 ## Key Metrics
 
@@ -66,6 +81,7 @@ Expected outputs are small JSON-like metric dictionaries, sampled strategy shape
 - **strategy_diversity:** mean pairwise distance between latent strategy embeddings.
 - **zero-shot transfer:** planned metric for evaluating strategies against held-out maps, goals, opponent policies, or environment perturbations.
 - **benchmark summary:** mean/std return, rates, sampled-response metrics where applicable, strategy diversity, and wall-clock time per environment/baseline.
+- **PursuitTrace:** versioned JSON artifact for multi-agent pursuit/evasion rollouts, including per-step actions, rewards, captures, active evaders, and summary metrics.
 
 ## Current Status
 
@@ -80,6 +96,7 @@ This is a research scaffold and early-stage experimental framework. It does not 
 - Add held-out grid layouts for zero-shot transfer and robustness tests.
 - Compare against PPO, heuristic policies, Gaussian latent strategies, and PSRO-style strategy populations.
 - Add richer visualizations for strategy embeddings, payoff matrices, and rollout traces.
+- Use validated pursuit traces as the shared artifact for rollout viewers, notebooks, and reports.
 - Promote selected public artifacts into versioned reports once experiments are stable.
 - Expand benchmark adapters once the custom gridworld metrics are stable across seed sweeps.
 

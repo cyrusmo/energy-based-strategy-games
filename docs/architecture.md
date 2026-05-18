@@ -67,3 +67,13 @@ The Day 3-7 harness adds public tooling around the training loop:
 - Benchmark registry and adapters for custom gridworld and optional PettingZoo Pursuit runs
 
 Benchmark adapters expose a comparable result schema while preserving environment-specific semantics. The custom gridworld remains the primary research environment; PettingZoo Pursuit is a secondary transfer benchmark behind an optional dependency.
+
+## Pursuit Trace Viewer
+
+The multi-evader pursuit/evasion demo is trace-first: a custom scripted rollout produces a validated `PursuitTrace`, and the CLI exporter, fixture, tests, docs, and optional Streamlit viewer consume that artifact. The viewer is intended for inspecting environment dynamics, scripted policy behavior, and trace-level metrics. It does not demonstrate learned robustness, optimality, or exact game-theoretic guarantees.
+
+Current implementation:
+
+- `strategy_games.traces.pursuit_trace.PursuitTrace`
+- `strategy_games.envs.multi_evader_pursuit.MultiEvaderPursuitEnv`
+- `strategy_games.rollouts.pursuit_runner.run_scripted_pursuit_rollout`

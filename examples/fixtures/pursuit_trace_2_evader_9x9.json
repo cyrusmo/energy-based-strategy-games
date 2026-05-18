@@ -1,0 +1,167 @@
+{
+  "env_id": "custom_multi_evader_pursuit_v0",
+  "episode_id": "fixture_2_evader_capture_timeout",
+  "grid_size": [
+    9,
+    9
+  ],
+  "metadata": {
+    "catch_radius": 0,
+    "config_path": null,
+    "created_at": "2026-05-18T00:00:00+00:00",
+    "env_params": {
+      "catch_radius": 0,
+      "grid_size": [
+        9,
+        9
+      ],
+      "max_steps": 2,
+      "num_evaders": 2,
+      "num_pursuers": 1
+    },
+    "evader_policy": "evader_goal_directed",
+    "feint_steps": 3,
+    "max_steps": 2,
+    "policy_mode": "scripted",
+    "pursuer_policy": "pursuer_greedy_nearest"
+  },
+  "num_evaders": 2,
+  "num_pursuers": 1,
+  "schema_version": "pursuit_trace/v1",
+  "seed": 101,
+  "steps": [
+    {
+      "actions": {
+        "evader_0": "stay",
+        "evader_1": "stay",
+        "pursuer_0": "right"
+      },
+      "active_evaders": [
+        "evader_0",
+        "evader_1"
+      ],
+      "agent_positions": {
+        "evader_0": [
+          4,
+          6
+        ],
+        "evader_1": [
+          0,
+          8
+        ],
+        "pursuer_0": [
+          4,
+          5
+        ]
+      },
+      "agent_roles": {
+        "evader_0": "evader",
+        "evader_1": "evader",
+        "pursuer_0": "pursuer"
+      },
+      "captures": [],
+      "done": false,
+      "step_rewards": {
+        "evader_0": 1.0,
+        "evader_1": 1.0,
+        "pursuer_0": -0.1
+      },
+      "t": 0
+    },
+    {
+      "actions": {
+        "evader_0": "stay",
+        "evader_1": "stay",
+        "pursuer_0": "right"
+      },
+      "active_evaders": [
+        "evader_1"
+      ],
+      "agent_positions": {
+        "evader_0": [
+          4,
+          6
+        ],
+        "evader_1": [
+          0,
+          8
+        ],
+        "pursuer_0": [
+          4,
+          6
+        ]
+      },
+      "agent_roles": {
+        "evader_0": "evader",
+        "evader_1": "evader",
+        "pursuer_0": "pursuer"
+      },
+      "captures": [
+        {
+          "evader_id": "evader_0",
+          "position": [
+            4,
+            6
+          ],
+          "pursuer_id": "pursuer_0",
+          "t": 1
+        }
+      ],
+      "done": true,
+      "step_rewards": {
+        "evader_0": -10.0,
+        "evader_1": 11.0,
+        "pursuer_0": 9.9
+      },
+      "t": 1
+    }
+  ],
+  "summary": {
+    "all_evaders_captured": false,
+    "capture_rate": 0.5,
+    "final_positions": {
+      "evader_0": [
+        4,
+        6
+      ],
+      "evader_1": [
+        0,
+        8
+      ],
+      "pursuer_0": [
+        4,
+        6
+      ]
+    },
+    "initial_positions": {
+      "evader_0": [
+        4,
+        6
+      ],
+      "evader_1": [
+        0,
+        8
+      ],
+      "pursuer_0": [
+        4,
+        4
+      ]
+    },
+    "mean_evader_return": 1.5,
+    "mean_pursuer_return": 9.8,
+    "outcome": "timeout",
+    "per_agent_returns": {
+      "evader_0": -9.0,
+      "evader_1": 12.0,
+      "pursuer_0": 9.8
+    },
+    "per_evader_status": {
+      "evader_0": "captured",
+      "evader_1": "survived"
+    },
+    "survival_rate": 0.5,
+    "terminated_reason": "timeout",
+    "total_steps": 2
+  },
+  "trace_type": "pursuit_evasion"
+}

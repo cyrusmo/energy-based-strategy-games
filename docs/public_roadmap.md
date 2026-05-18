@@ -16,6 +16,7 @@ This repository is currently a research scaffold for early experiments in energy
 - Baseline comparison harness
 - Named-strategy payoff matrix
 - Benchmark registry and runner for custom gridworld seed sweeps
+- Validated pursuit/evasion trace schema and custom multi-evader rollout viewer
 - Optional PettingZoo Pursuit adapter for transfer benchmarking
 - Unit and smoke tests
 
@@ -25,6 +26,7 @@ This repository is currently a research scaffold for early experiments in energy
 - Improve EBM training from buffer positives and sampler negatives
 - Add richer rollout logging and visualization summaries
 - Add held-out gridworld layouts
+- Add more pursuit trace fixtures and curated public demos
 - Run PPO-lite seed sweeps and diagnose failure modes
 - Add benchmark reports for seed sweeps without overclaiming performance
 - Add simple payoff-matrix experiments

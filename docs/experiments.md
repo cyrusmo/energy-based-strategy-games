@@ -81,6 +81,7 @@ Config-driven runs can write public artifacts under `outputs/public/`:
 - `metrics.json`: aggregate run metrics and final update losses
 - `config.yaml`: saved config snapshot
 - `trace.txt`: line-oriented rollout trace for public demos
+- `trace.json`: validated multi-agent pursuit/evasion trace artifact
 - `trajectory.png`: simple grid path visualization
 - `matrix.json`: named strategy-vs-opponent payoff matrix
 
