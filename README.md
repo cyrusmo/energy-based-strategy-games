@@ -57,6 +57,7 @@ python examples/compare_baselines.py
 python examples/compute_payoff_matrix.py
 python examples/run_benchmarks.py --config configs/benchmarks/debug_suite.yaml
 python examples/export_pursuit_trace.py --config configs/demo/custom_2_evader_9x9.yaml
+python examples/compare_pursuit_policies.py
 ```
 
 Expected outputs are small JSON-like metric dictionaries, sampled strategy shapes and energies, evaluator summaries for named strategies, a short training-loop history, public artifact files under `outputs/public/`, a rollout trace PNG, a PPO-lite baseline metrics file, a baseline metric table, a named-strategy payoff matrix, and a validated pursuit/evasion `trace.json`. The commands are designed to finish quickly on CPU.
@@ -82,6 +83,7 @@ This viewer is intended for inspecting environment dynamics, scripted policy beh
 - **zero-shot transfer:** planned metric for evaluating strategies against held-out maps, goals, opponent policies, or environment perturbations.
 - **benchmark summary:** mean/std return, rates, sampled-response metrics where applicable, strategy diversity, and wall-clock time per environment/baseline.
 - **PursuitTrace:** versioned JSON artifact for multi-agent pursuit/evasion rollouts, including per-step actions, rewards, captures, active evaders, and summary metrics.
+- **pursuit empirical-game diagnostics:** rectangular scripted-policy matrix with pursuer policies as rows, evader policies as columns, `mean_pursuer_return` as the primary payoff, uniform-column empirical regret, maximin row policy, and a payoff-weighted row-policy ranking distribution. This is not an equilibrium solver.
 
 ## Current Status
 

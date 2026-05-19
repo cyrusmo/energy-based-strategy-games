@@ -73,6 +73,26 @@ Near-term ablations:
 
 Public reports should state whether metrics are exact or approximate. The current `exploitability_proxy` should not be presented as true Nash exploitability.
 
+## Pursuit Empirical-Game Diagnostics
+
+The multi-evader pursuit demo includes a role-specific scripted-policy comparison:
+
+```bash
+python examples/compare_pursuit_policies.py
+```
+
+Rows are pursuer policies and columns are evader policies. The primary payoff is
+`mean_pursuer_return`; `mean_evader_return`, capture rate, survival rate, and
+average steps are reported separately. The matrix is rectangular and
+general-sum, so the evaluator does not assume symmetry or zero-sum payoffs.
+
+The empirical-game block computes row payoff against a uniform column-policy
+mixture, empirical regret against that same uniform mixture, worst-case row
+payoff, a maximin row policy, and a payoff-weighted row-policy ranking
+distribution. This is a conservative diagnostic over scripted policies only. It
+is not a Nash equilibrium, CFR result, PSRO result, learned best response, or
+exact exploitability estimate.
+
 ## Public Artifacts
 
 Config-driven runs can write public artifacts under `outputs/public/`:
@@ -84,6 +104,8 @@ Config-driven runs can write public artifacts under `outputs/public/`:
 - `trace.json`: validated multi-agent pursuit/evasion trace artifact
 - `trajectory.png`: simple grid path visualization
 - `matrix.json`: named strategy-vs-opponent payoff matrix
+- `policy_comparison.json`: pursuit scripted-policy empirical-game diagnostics
+- `policy_comparison.csv`: flat public summary table for pursuit policy pairs
 
 Generated demo artifacts are ignored by default so curated results can be promoted deliberately.
 

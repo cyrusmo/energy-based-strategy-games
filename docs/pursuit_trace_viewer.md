@@ -43,6 +43,39 @@ streamlit run examples/pursuit_trace_viewer.py
 The viewer can load a saved `trace.json`. Live rollout mode is secondary and uses
 the same trace schema internally.
 
+## Policy Comparison Diagnostics
+
+The pursuit demo also includes a conservative empirical-game diagnostic over
+scripted policies:
+
+```bash
+python examples/compare_pursuit_policies.py --config configs/demo/pursuit_policy_comparison.yaml
+```
+
+This writes:
+
+- `outputs/public/pursuit_demo/policy_comparison.json`
+- `outputs/public/pursuit_demo/policy_comparison.csv`
+
+The JSON artifact is canonical. The CSV is a flat public summary table with one
+row per pursuer-policy / evader-policy pair.
+
+The comparison treats the matrix as rectangular and role-specific: rows are
+pursuer policies, columns are evader policies, and the primary payoff is
+`mean_pursuer_return`. It does not assume the game is zero-sum; evader returns
+are reported separately.
+
+The empirical-game block reports:
+
+- payoff against a uniform column-policy mixture
+- worst-case row payoff
+- empirical regret against the uniform column mixture
+- maximin row policy
+- a payoff-weighted row-policy ranking distribution
+
+The ranking distribution uses a multiplicative-weights-style soft scoring rule
+over row payoffs. It is a ranking distribution, not an equilibrium solver.
+
 ## Trace Schema Overview
 
 Top-level fields:
