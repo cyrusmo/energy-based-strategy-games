@@ -6,9 +6,11 @@ import sys
 from pathlib import Path
 
 import pytest
+import torch
 import yaml
 
 from strategy_games.envs.multi_evader_pursuit import MultiEvaderPursuitConfig
+from strategy_games.envs.pursuit_actions import ACTIONS
 from strategy_games.experiments.pursuit_comparison import (
     CSV_FIELDS,
     PursuitPolicyComparisonConfig,
@@ -19,6 +21,8 @@ from strategy_games.experiments.pursuit_comparison import (
     save_policy_comparison_csv,
     save_policy_comparison_json,
 )
+from strategy_games.models.pursuit_observation import OBSERVATION_SCHEMA, PursuitObservationSpec
+from strategy_games.policies.pursuit_targets import PursuitActorCritic
 
 
 def tiny_comparison_config(tmp_path: Path, eta: float = 1.0) -> PursuitPolicyComparisonConfig:
@@ -121,6 +125,42 @@ def test_policy_comparison_is_deterministic_with_fixed_metadata(tmp_path: Path) 
     assert first == second
 
 
+def test_policy_comparison_can_include_explicit_learned_pursuer_row(tmp_path: Path) -> None:
+    checkpoint_path = _write_dummy_pursuer_checkpoint(tmp_path / "ppo_pursuer.pt")
+    config = PursuitPolicyComparisonConfig(
+        seeds=(0,),
+        pursuer_policies=("pursuer_greedy_nearest",),
+        evader_policies=("evader_flee_nearest",),
+        env=MultiEvaderPursuitConfig(
+            grid_size=(5, 5),
+            num_evaders=2,
+            num_pursuers=1,
+            max_steps=3,
+            pursuer_starts=((2, 2),),
+            evader_starts=((2, 4), (0, 4)),
+            evader_goals=((4, 4), (4, 0)),
+        ),
+        created_at="2026-05-19T00:00:00+00:00",
+        git_commit=None,
+        learned_pursuer_checkpoint=checkpoint_path,
+    )
+
+    result = compute_pursuit_policy_comparison(config)
+
+    assert result["pursuer_policies"] == ["pursuer_greedy_nearest", "dummy_ppo_pursuer"]
+    assert len(result["payoff_matrix"]) == 2
+    assert all(len(row) == 1 for row in result["payoff_matrix"])
+    learned_targets = [
+        target
+        for target in result["pursuer_policy_targets"]
+        if target["policy_type"] == "learned"
+    ]
+    assert len(learned_targets) == 1
+    assert learned_targets[0]["policy_id"] == "dummy_ppo_pursuer"
+    assert "checkpoint_path" not in learned_targets[0]
+    assert learned_targets[0]["metadata"]["observation_schema"] == OBSERVATION_SCHEMA
+
+
 def test_compare_pursuit_policies_cli_writes_artifacts(tmp_path: Path) -> None:
     config_path = tmp_path / "comparison.yaml"
     output_dir = tmp_path / "pursuit_demo"
@@ -161,3 +201,30 @@ def test_compare_pursuit_policies_cli_writes_artifacts(tmp_path: Path) -> None:
     assert "maximin_policy=" in completed.stdout
     assert (output_dir / "policy_comparison.json").exists()
     assert (output_dir / "policy_comparison.csv").exists()
+
+
+def _write_dummy_pursuer_checkpoint(path: Path) -> Path:
+    spec = PursuitObservationSpec(role="pursuer", max_pursuers=1, max_evaders=2)
+    model = PursuitActorCritic(obs_dim=spec.obs_dim, action_dim=len(ACTIONS), hidden_dim=16)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    torch.save(
+        {
+            "model_state_dict": model.state_dict(),
+            "observation_schema": OBSERVATION_SCHEMA,
+            "action_space": list(ACTIONS),
+            "max_pursuers": spec.max_pursuers,
+            "max_evaders": spec.max_evaders,
+            "obs_dim": spec.obs_dim,
+            "hidden_dim": 16,
+            "policy_id": "dummy_ppo_pursuer",
+            "training_run_id": "dummy_run",
+            "training_scope": {
+                "controlled_agent_id": "pursuer_0",
+                "trained_role": "pursuer",
+                "opponent_policy": "scripted",
+                "self_play": False,
+            },
+        },
+        path,
+    )
+    return path

@@ -1,4 +1,4 @@
-"""Compare scripted policies in the custom multi-evader pursuit environment."""
+"""Compare pursuit policies in the custom multi-evader pursuit environment."""
 
 from __future__ import annotations
 
@@ -17,12 +17,18 @@ from strategy_games.utils.config import load_config
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Run scripted pursuit policy comparison diagnostics.")
+    parser = argparse.ArgumentParser(description="Run pursuit policy comparison diagnostics.")
     parser.add_argument("--config", type=Path, default=Path("configs/demo/pursuit_policy_comparison.yaml"))
     parser.add_argument("--output-json", type=Path, default=None)
     parser.add_argument("--output-csv", type=Path, default=None)
     parser.add_argument("--num-seeds", type=int, default=None)
     parser.add_argument("--eta", type=float, default=None)
+    parser.add_argument(
+        "--include-learned-pursuer",
+        type=Path,
+        default=None,
+        help="Optional private PPO checkpoint to include as an additional learned pursuer row.",
+    )
     parser.add_argument("--no-csv", action="store_true")
     args = parser.parse_args()
 
@@ -40,6 +46,8 @@ def main() -> None:
         config = replace(config, output_csv=args.output_csv)
     if args.no_csv:
         config = replace(config, save_csv=False)
+    if args.include_learned_pursuer is not None:
+        config = replace(config, learned_pursuer_checkpoint=args.include_learned_pursuer)
 
     result = compute_pursuit_policy_comparison(config)
     json_path = save_policy_comparison_json(result, config.output_json)

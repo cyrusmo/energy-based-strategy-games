@@ -1,4 +1,4 @@
-"""Empirical-game diagnostics for scripted multi-evader pursuit policies."""
+"""Empirical-game diagnostics for multi-evader pursuit policies."""
 
 from __future__ import annotations
 
@@ -14,8 +14,14 @@ from typing import Any
 
 import numpy as np
 
-from strategy_games.envs.multi_evader_pursuit import MultiEvaderPursuitConfig
+from strategy_games.envs.multi_evader_pursuit import MultiEvaderPursuitConfig, MultiEvaderPursuitEnv
+from strategy_games.policies.pursuit_targets import (
+    LearnedPursuerPolicyAdapter,
+    PolicyTarget,
+    ScriptedPursuitPolicyAdapter,
+)
 from strategy_games.policies.scripted_pursuit import EVADER_POLICIES, PURSUER_POLICIES
+from strategy_games.policies.scripted_pursuit import scripted_pursuit_actions
 from strategy_games.rollouts import (
     PursuitRolloutConfig,
     multi_evader_config_from_mapping,
@@ -40,14 +46,14 @@ CSV_FIELDS = (
     "num_episodes",
 )
 EMPIRICAL_GAME_NOTES = (
-    "Approximate empirical-game diagnostics over scripted policies only; not a Nash equilibrium, CFR result, "
-    "PSRO result, learned best response, or exact exploitability estimate."
+    "Approximate empirical-game diagnostics over scripted policies and explicitly provided learned policies; not a "
+    "Nash equilibrium, CFR result, PSRO result, learned best response, or exact exploitability estimate."
 )
 
 
 @dataclass(frozen=True)
 class PursuitPolicyComparisonConfig:
-    """Configuration for scripted pursuit policy comparison diagnostics."""
+    """Configuration for pursuit policy comparison diagnostics."""
 
     seeds: tuple[int, ...] = tuple(range(20))
     pursuer_policies: tuple[str, ...] = PURSUER_POLICIES
@@ -61,6 +67,7 @@ class PursuitPolicyComparisonConfig:
     created_at: str | None = None
     git_commit: str | None = None
     config_path: str | None = None
+    learned_pursuer_checkpoint: Path | None = None
 
 
 def compute_pursuit_policy_comparison(config: PursuitPolicyComparisonConfig | None = None) -> dict[str, Any]:
@@ -71,13 +78,17 @@ def compute_pursuit_policy_comparison(config: PursuitPolicyComparisonConfig | No
     created_at = config.created_at or datetime.now(UTC).replace(microsecond=0).isoformat()
     git_commit = config.git_commit if config.git_commit is not None else _git_commit()
 
-    metrics = _empty_metric_matrices(len(config.pursuer_policies), len(config.evader_policies))
-    cell_sample_count = _zero_matrix(len(config.pursuer_policies), len(config.evader_policies), int)
+    pursuer_adapters = _pursuer_adapters(config)
+    evader_targets = _evader_targets(config)
+    pursuer_policy_ids = tuple(adapter.target.policy_id for adapter in pursuer_adapters)
+    evader_policy_ids = tuple(target.policy_id for target in evader_targets)
+    metrics = _empty_metric_matrices(len(pursuer_adapters), len(evader_policy_ids))
+    cell_sample_count = _zero_matrix(len(pursuer_adapters), len(evader_policy_ids), int)
 
-    for row_idx, pursuer_policy in enumerate(config.pursuer_policies):
-        for col_idx, evader_policy in enumerate(config.evader_policies):
+    for row_idx, pursuer_adapter in enumerate(pursuer_adapters):
+        for col_idx, evader_policy in enumerate(evader_policy_ids):
             samples = [
-                _run_policy_pair(config, int(seed), pursuer_policy, evader_policy)
+                _run_policy_pair(config, int(seed), pursuer_adapter, evader_policy)
                 for seed in config.seeds
             ]
             cell_sample_count[row_idx][col_idx] = len(samples)
@@ -85,7 +96,7 @@ def compute_pursuit_policy_comparison(config: PursuitPolicyComparisonConfig | No
                 metrics[metric_name][row_idx][col_idx] = _mean(sample[metric_name] for sample in samples)
 
     payoff_matrix = metrics["mean_pursuer_return"]
-    empirical_game = empirical_game_diagnostics(payoff_matrix, config.pursuer_policies, eta=config.eta)
+    empirical_game = empirical_game_diagnostics(payoff_matrix, pursuer_policy_ids, eta=config.eta)
     return {
         "schema_version": SCHEMA_VERSION,
         "env_id": COMPARISON_ENV_ID,
@@ -101,8 +112,10 @@ def compute_pursuit_policy_comparison(config: PursuitPolicyComparisonConfig | No
         "num_seeds": len(config.seeds),
         "num_episodes_per_cell": len(config.seeds),
         "seeds": list(config.seeds),
-        "pursuer_policies": list(config.pursuer_policies),
-        "evader_policies": list(config.evader_policies),
+        "pursuer_policies": list(pursuer_policy_ids),
+        "evader_policies": list(evader_policy_ids),
+        "pursuer_policy_targets": [adapter.target.public_dict() for adapter in pursuer_adapters],
+        "evader_policy_targets": [target.public_dict() for target in evader_targets],
         "methodology": {
             "row_player": "pursuer",
             "column_player": "evader",
@@ -220,6 +233,11 @@ def pursuit_policy_comparison_config_from_mapping(
         created_at=str(metadata["created_at"]) if metadata.get("created_at") is not None else None,
         git_commit=str(metadata["git_commit"]) if metadata.get("git_commit") is not None else None,
         config_path=config_path,
+        learned_pursuer_checkpoint=(
+            Path(str(raw["learned_pursuer_checkpoint"]))
+            if raw.get("learned_pursuer_checkpoint") is not None
+            else None
+        ),
     )
 
 
@@ -320,6 +338,34 @@ def format_policy_comparison_summary(result: Mapping[str, Any]) -> str:
 def _run_policy_pair(
     config: PursuitPolicyComparisonConfig,
     seed: int,
+    pursuer_adapter: ScriptedPursuitPolicyAdapter | LearnedPursuerPolicyAdapter,
+    evader_policy: str,
+) -> dict[str, float]:
+    if isinstance(pursuer_adapter, ScriptedPursuitPolicyAdapter):
+        return _run_scripted_policy_pair(config, seed, pursuer_adapter.policy_id, evader_policy)
+
+    env = MultiEvaderPursuitEnv(config.env)
+    pursuer_adapter.validate_env(env)
+    env.reset()
+    rng = np.random.default_rng(seed)
+    while not env.done:
+        scripted = scripted_pursuit_actions(
+            env=env,
+            pursuer_policy="pursuer_greedy_nearest",
+            evader_policy=evader_policy,
+            rng=rng,
+            step_index=env.steps,
+            feint_steps=config.feint_steps,
+        )
+        actions = dict(scripted)
+        actions["pursuer_0"] = pursuer_adapter.act(env, "pursuer_0", env.steps, rng)
+        env.step(actions)
+    return _episode_summary(env)
+
+
+def _run_scripted_policy_pair(
+    config: PursuitPolicyComparisonConfig,
+    seed: int,
     pursuer_policy: str,
     evader_policy: str,
 ) -> dict[str, float]:
@@ -339,6 +385,44 @@ def _run_policy_pair(
         "mean_pursuer_return": float(trace.summary.mean_pursuer_return),
         "mean_evader_return": float(trace.summary.mean_evader_return),
         "average_steps": float(trace.summary.total_steps),
+    }
+
+
+def _pursuer_adapters(
+    config: PursuitPolicyComparisonConfig,
+) -> list[ScriptedPursuitPolicyAdapter | LearnedPursuerPolicyAdapter]:
+    adapters: list[ScriptedPursuitPolicyAdapter | LearnedPursuerPolicyAdapter] = [
+        ScriptedPursuitPolicyAdapter(policy_id=policy, role="pursuer", feint_steps=config.feint_steps)
+        for policy in config.pursuer_policies
+    ]
+    if config.learned_pursuer_checkpoint is not None:
+        adapters.append(
+            LearnedPursuerPolicyAdapter(
+                config.learned_pursuer_checkpoint,
+                env=MultiEvaderPursuitEnv(config.env),
+            )
+        )
+    return adapters
+
+
+def _evader_targets(config: PursuitPolicyComparisonConfig) -> list[PolicyTarget]:
+    return [
+        PolicyTarget(policy_id=policy, policy_type="scripted", role="evader")
+        for policy in config.evader_policies
+    ]
+
+
+def _episode_summary(env: MultiEvaderPursuitEnv) -> dict[str, float]:
+    captured = sum(1 for status in env.per_evader_status.values() if status == "captured")
+    survived = sum(1 for status in env.per_evader_status.values() if status == "survived")
+    pursuer_returns = [env.per_agent_returns[pursuer_id] for pursuer_id in env.pursuer_ids]
+    evader_returns = [env.per_agent_returns[evader_id] for evader_id in env.evader_ids]
+    return {
+        "capture_rate": float(captured / env.config.num_evaders),
+        "survival_rate": float(survived / env.config.num_evaders),
+        "mean_pursuer_return": float(np.mean(pursuer_returns)),
+        "mean_evader_return": float(np.mean(evader_returns)),
+        "average_steps": float(env.steps),
     }
 
 

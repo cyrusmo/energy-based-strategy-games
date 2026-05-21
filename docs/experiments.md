@@ -24,6 +24,7 @@ Initial baselines:
 - Direct-to-goal heuristic attacker
 - Gaussian latent strategy sampler
 - PPO-lite actor-critic attacker baseline
+- PPO-lite `pursuer_0` baseline for multi-evader pursuit, trained against scripted evaders
 - Lightweight strategy-conditioned policy-gradient update
 
 Planned baselines:
@@ -81,6 +82,14 @@ The multi-evader pursuit demo includes a role-specific scripted-policy compariso
 python examples/compare_pursuit_policies.py
 ```
 
+After training the tiny pursuit PPO baseline, an explicit learned pursuer row can
+be included:
+
+```bash
+python examples/train_ppo_pursuer.py --config configs/demo/ppo_pursuer_smoke.yaml
+python examples/compare_pursuit_policies.py --include-learned-pursuer outputs/private/checkpoints/ppo_pursuer.pt
+```
+
 Rows are pursuer policies and columns are evader policies. The primary payoff is
 `mean_pursuer_return`; `mean_evader_return`, capture rate, survival rate, and
 average steps are reported separately. The matrix is rectangular and
@@ -89,9 +98,32 @@ general-sum, so the evaluator does not assume symmetry or zero-sum payoffs.
 The empirical-game block computes row payoff against a uniform column-policy
 mixture, empirical regret against that same uniform mixture, worst-case row
 payoff, a maximin row policy, and a payoff-weighted row-policy ranking
-distribution. This is a conservative diagnostic over scripted policies only. It
-is not a Nash equilibrium, CFR result, PSRO result, learned best response, or
-exact exploitability estimate.
+distribution. This is a conservative diagnostic over scripted policies and any
+explicitly provided learned policies. It is not a Nash equilibrium, CFR result,
+PSRO result, learned best response, or exact exploitability estimate.
+
+## Pursuit PPO Smoke Baseline
+
+The first trainable multi-evader path controls only `pursuer_0` with a small
+actor-critic policy. Evaders remain scripted during training. The observation
+contract is `pursuit_obs/v1`, with fixed `max_pursuers=1`, `max_evaders=2`,
+explicit feature order, masks, normalization, and action labels. Incompatible
+agent counts are rejected instead of silently changing the model input shape.
+
+Public outputs:
+
+- `outputs/public/pursuit_models/ppo_pursuer/config.json`
+- `outputs/public/pursuit_models/ppo_pursuer/metrics.json`
+
+Private output:
+
+- `outputs/private/checkpoints/ppo_pursuer.pt`
+
+The public metrics expose `checkpoint_written`, deterministic `eval_seeds`,
+training scope, observation metadata, action-space metadata, training metrics,
+and fixed-seed evaluation metrics. They do not expose the private checkpoint
+path by default. This baseline is intended to prove the learning/evaluation path
+is live, not to claim robust pursuit performance.
 
 ## Public Artifacts
 
@@ -106,6 +138,7 @@ Config-driven runs can write public artifacts under `outputs/public/`:
 - `matrix.json`: named strategy-vs-opponent payoff matrix
 - `policy_comparison.json`: pursuit scripted-policy empirical-game diagnostics
 - `policy_comparison.csv`: flat public summary table for pursuit policy pairs
+- `pursuit_models/ppo_pursuer/metrics.json`: first trainable pursuit PPO smoke metrics
 
 Generated demo artifacts are ignored by default so curated results can be promoted deliberately.
 

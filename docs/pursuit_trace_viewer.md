@@ -79,6 +79,18 @@ This writes:
 The JSON artifact is canonical. The CSV is a flat public summary table with one
 row per pursuer-policy / evader-policy pair.
 
+If a private PPO pursuer checkpoint has been trained, the comparison script can
+include it as an explicit learned pursuer row:
+
+```bash
+python examples/train_ppo_pursuer.py --config configs/demo/ppo_pursuer_smoke.yaml
+python examples/compare_pursuit_policies.py --include-learned-pursuer outputs/private/checkpoints/ppo_pursuer.pt
+```
+
+The learned row uses deterministic `argmax` inference, strict `pursuit_obs/v1`
+metadata checks, and public checkpoint-derived metadata. The private checkpoint
+path is not written into the public comparison artifact.
+
 The viewer defaults to `outputs/public/pursuit_demo/policy_comparison.json` for
 Head-To-Head Diagnostics. If that artifact is missing, it shows the generation
 command instead of presenting an empty or misleading table.
@@ -127,5 +139,5 @@ per-evader status.
 The first implementation is deliberately simple: deterministic reset, scripted
 policies, simultaneous movement, boundary clipping, capture after movement, and
 timeout. It does not include learning integration, obstacles, partial
-observability, communication, autoplay, learned checkpoint loading, or PettingZoo
-trace adaptation.
+observability, communication, autoplay, live model loading inside the viewer, or
+PettingZoo trace adaptation.

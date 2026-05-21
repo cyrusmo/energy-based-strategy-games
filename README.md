@@ -58,6 +58,8 @@ python examples/compute_payoff_matrix.py
 python examples/run_benchmarks.py --config configs/benchmarks/debug_suite.yaml
 python examples/export_pursuit_trace.py --config configs/demo/custom_2_evader_9x9.yaml
 python examples/compare_pursuit_policies.py
+python examples/train_ppo_pursuer.py --config configs/demo/ppo_pursuer_smoke.yaml
+python examples/compare_pursuit_policies.py --include-learned-pursuer outputs/private/checkpoints/ppo_pursuer.pt
 ```
 
 Expected outputs are small JSON-like metric dictionaries, sampled strategy shapes and energies, evaluator summaries for named strategies, a short training-loop history, public artifact files under `outputs/public/`, a rollout trace PNG, a PPO-lite baseline metrics file, a baseline metric table, a named-strategy payoff matrix, and a validated pursuit/evasion `trace.json`. The commands are designed to finish quickly on CPU.
@@ -84,14 +86,16 @@ This viewer is intended for inspecting environment dynamics, scripted policy beh
 - **benchmark summary:** mean/std return, rates, sampled-response metrics where applicable, strategy diversity, and wall-clock time per environment/baseline.
 - **PursuitTrace:** versioned JSON artifact for multi-agent pursuit/evasion rollouts, including per-step actions, rewards, captures, active evaders, and summary metrics.
 - **pursuit empirical-game diagnostics:** rectangular scripted-policy matrix with pursuer policies as rows, evader policies as columns, `mean_pursuer_return` as the primary payoff, uniform-column empirical regret, maximin row policy, and a payoff-weighted row-policy ranking distribution. This is not an equilibrium solver.
+- **pursuit PPO baseline:** first trainable `pursuer_0` path for the multi-evader pursuit game. It saves public metrics/config metadata and an ignored private checkpoint, then can be included as an explicit learned row in pursuit comparison.
 
 ## Current Status
 
-This is a research scaffold and early-stage experimental framework. It does not claim state-of-the-art performance, convergence guarantees, or exact equilibrium computation. The current gridworld and evaluator are intentionally simple so the Generate -> Evaluate -> Execute -> Update loop can be inspected and tested end to end. The Day 2 loop includes lightweight REINFORCE-style policy updates, contrastive EBM updates, and one-step world-model fitting. The Day 3-7 harness adds public logging, rollout visualization, baseline comparison, payoff-matrix evaluation, and a benchmark runner. A first PPO-lite attacker baseline is available for the custom gridworld, but it is not yet a strong policy. PettingZoo Pursuit is available as an optional transfer benchmark, not a replacement for the custom research gridworld.
+This is a research scaffold and early-stage experimental framework. It does not claim state-of-the-art performance, convergence guarantees, or exact equilibrium computation. The current gridworld and evaluator are intentionally simple so the Generate -> Evaluate -> Execute -> Update loop can be inspected and tested end to end. The Day 2 loop includes lightweight REINFORCE-style policy updates, contrastive EBM updates, and one-step world-model fitting. The Day 3-7 harness adds public logging, rollout visualization, baseline comparison, payoff-matrix evaluation, and a benchmark runner. A first PPO-lite attacker baseline is available for the custom gridworld, and a first PPO-lite `pursuer_0` path is available for multi-evader pursuit. These are live baselines, not strong policy claims. PettingZoo Pursuit is available as an optional transfer benchmark, not a replacement for the custom research gridworld.
 
 ## Research Roadmap
 
 - Harden the PPO-lite baseline and compare it against the strategy loop across seed sweeps.
+- Add evader-side PPO only after the pursuer-side path is stable and comparable.
 - Improve EBM training with better negative sampling and replay schedules.
 - Use the learned world model for imaginary strategy evaluation.
 - Expand game-theoretic evaluation beyond sampled heuristic responses.

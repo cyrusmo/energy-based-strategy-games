@@ -30,6 +30,23 @@ Current implementation:
 - `strategy_games.models.policy.StrategyConditionedPolicy`
 - `strategy_games.models.policy.RandomPolicy`
 
+## Pursuit PPO Path
+
+The first trainable multi-evader pursuit path is deliberately narrow: a PPO-lite
+actor-critic controls only `pursuer_0` against scripted evaders. It uses the
+versioned `pursuit_obs/v1` observation contract so checkpoints, adapters, tests,
+and comparison artifacts agree on feature order, masks, normalization, and
+action labels. Incompatible agent counts are rejected for this baseline instead
+of being padded silently beyond the checkpoint contract.
+
+Current implementation:
+
+- `strategy_games.models.pursuit_observation.PursuitObservationSpec`
+- `strategy_games.policies.pursuit_targets.PursuitActorCritic`
+- `strategy_games.policies.pursuit_targets.LearnedPursuerPolicyAdapter`
+- `strategy_games.training.ppo_pursuit.train_ppo_pursuer`
+- `examples/train_ppo_pursuer.py`
+
 ## World Model
 
 The world model is a clean interface for learned transition and reward prediction. The first evaluator still uses true environment rollouts. The Day 2 training loop fits the world model on observed one-step transitions, leaving imaginary rollout evaluation as a future extension.

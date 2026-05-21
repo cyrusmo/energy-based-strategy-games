@@ -1,0 +1,42 @@
+seed: 23
+training_run_id: ppo_pursuer_smoke
+policy_id: ppo_pursuer_v1
+max_pursuers: 1
+max_evaders: 2
+evader_policy: evader_feint
+feint_steps: 3
+eval_seeds: [0, 1, 2, 3, 4]
+
+env:
+  grid_size: [9, 9]
+  num_evaders: 2
+  num_pursuers: 1
+  max_steps: 18
+  catch_radius: 0
+  pursuer_starts:
+    - [4, 4]
+  evader_starts:
+    - [4, 6]
+    - [0, 8]
+  evader_goals:
+    - [8, 8]
+    - [8, 0]
+
+ppo:
+  num_updates: 3
+  rollout_steps: 48
+  update_epochs: 2
+  minibatch_size: 32
+  hidden_dim: 64
+  learning_rate: 0.0003
+  gamma: 0.99
+  gae_lambda: 0.95
+  clip_range: 0.2
+  value_coef: 0.5
+  entropy_coef: 0.01
+  grad_clip_norm: 0.5
+
+output:
+  public_dir: outputs/public/pursuit_models/ppo_pursuer
+  checkpoint_path: outputs/private/checkpoints/ppo_pursuer.pt
+  save_checkpoint: true
