@@ -43,6 +43,25 @@ streamlit run examples/pursuit_trace_viewer.py
 The viewer can load a saved `trace.json`. Live rollout mode is secondary and uses
 the same trace schema internally.
 
+## Viewer Controls
+
+The viewer is stateful: editing sidebar fields updates a draft rollout config,
+but it does not mutate the active trace. Use `Run Rollout` to commit the draft
+config and generate a new trace. Use `Load Trace` to load a saved JSON trace.
+
+The frame inspector provides:
+
+- `Previous`, `Next`, and `Reset` buttons for manual navigation
+- a slider for precise transition inspection
+- a transition context panel with actions, rewards, captures, active evaders,
+  and done status
+- a trace metadata panel with environment, seed, grid size, agent counts,
+  max steps, catch radius, outcome, and termination reason
+
+If no trace is loaded, the viewer shows an empty state instead of regenerating a
+rollout implicitly. If trace validation fails, the viewer displays the loading
+error without crashing the entire app.
+
 ## Policy Comparison Diagnostics
 
 The pursuit demo also includes a conservative empirical-game diagnostic over
@@ -59,6 +78,10 @@ This writes:
 
 The JSON artifact is canonical. The CSV is a flat public summary table with one
 row per pursuer-policy / evader-policy pair.
+
+The viewer defaults to `outputs/public/pursuit_demo/policy_comparison.json` for
+Head-To-Head Diagnostics. If that artifact is missing, it shows the generation
+command instead of presenting an empty or misleading table.
 
 The comparison treats the matrix as rectangular and role-specific: rows are
 pursuer policies, columns are evader policies, and the primary payoff is
@@ -104,4 +127,5 @@ per-evader status.
 The first implementation is deliberately simple: deterministic reset, scripted
 policies, simultaneous movement, boundary clipping, capture after movement, and
 timeout. It does not include learning integration, obstacles, partial
-observability, communication, or PettingZoo trace adaptation.
+observability, communication, autoplay, learned checkpoint loading, or PettingZoo
+trace adaptation.

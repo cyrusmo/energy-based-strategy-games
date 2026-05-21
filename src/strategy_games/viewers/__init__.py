@@ -1,11 +1,43 @@
 """Viewer data helpers for pursuit/evasion traces."""
 
 from strategy_games.viewers.pursuit_render_data import (
+    COMPARISON_GENERATION_COMMAND,
+    ComparisonState,
     agent_status_rows,
+    clamp_frame_index,
+    comparison_diagnostics_summary,
     grid_frame,
+    load_policy_comparison_state,
     plot_pursuit_trace,
+    pursuer_effectiveness_summary,
+    evader_effectiveness_summary,
+    step_frame_index,
+    styled_grid_frame,
+    styled_grid_html,
     summary_metrics,
+    trace_metadata,
     trace_table_rows,
+    transition_context,
+    validate_policy_comparison_artifact,
 )
 
-__all__ = ["agent_status_rows", "grid_frame", "plot_pursuit_trace", "summary_metrics", "trace_table_rows"]
+__all__ = [
+    "COMPARISON_GENERATION_COMMAND",
+    "ComparisonState",
+    "agent_status_rows",
+    "clamp_frame_index",
+    "comparison_diagnostics_summary",
+    "evader_effectiveness_summary",
+    "grid_frame",
+    "load_policy_comparison_state",
+    "plot_pursuit_trace",
+    "pursuer_effectiveness_summary",
+    "step_frame_index",
+    "styled_grid_frame",
+    "styled_grid_html",
+    "summary_metrics",
+    "trace_metadata",
+    "trace_table_rows",
+    "transition_context",
+    "validate_policy_comparison_artifact",
+]
