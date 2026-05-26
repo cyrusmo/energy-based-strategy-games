@@ -16,7 +16,7 @@ from strategy_games.models.policy import StrategyConditionedPolicy
 from strategy_games.models.world_model import LearnedWorldModel
 from strategy_games.strategies.buffer import StrategyBuffer, StrategyRecord
 from strategy_games.strategies.embeddings import available_heuristic_strategies, named_strategy_embedding, pairwise_diversity
-from strategy_games.strategies.sampler import langevin_sample
+from strategy_games.strategies.sampler import GaussianStrategySampler, langevin_sample
 from strategy_games.training.losses import policy_gradient_surrogate, world_model_loss
 from strategy_games.utils.seeding import set_global_seed
 
@@ -43,6 +43,10 @@ class TrainingConfig:
     grad_clip_norm: float = 1.0
     ebm_batch_size: int = 8
     positive_quantile: float = 0.5
+    sampler_type: str = "langevin"
+    gaussian_scale: float = 1.0
+    robustness_aware_selection: bool = True
+    use_buffer_positives: bool = True
     train_policy: bool = True
     train_ebm: bool = True
     train_world_model: bool = True
@@ -132,11 +136,14 @@ def run_training_loop(config: TrainingConfig | None = None) -> dict[str, object]
         for idx, strategy in enumerate(candidates):
             label = labels[idx] if idx < len(labels) else None
             metrics = evaluator.evaluate_strategy(strategy.detach().cpu(), label=label)
-            selection_score = (
-                float(metrics["average_case_value"])
-                + float(metrics["robustness_score"])
-                - float(metrics["exploitability_proxy"])
-            )
+            if config.robustness_aware_selection:
+                selection_score = (
+                    float(metrics["average_case_value"])
+                    + float(metrics["robustness_score"])
+                    - float(metrics["exploitability_proxy"])
+                )
+            else:
+                selection_score = float(metrics["average_case_value"])
             evaluated.append((selection_score, strategy.detach().cpu(), label, metrics))
 
         evaluated.sort(key=lambda item: item[0], reverse=True)
@@ -191,7 +198,7 @@ def run_training_loop(config: TrainingConfig | None = None) -> dict[str, object]
 
 
 def generate_candidate_strategies(ebm: EnergyMLP, config: TrainingConfig) -> torch.Tensor:
-    """Generate a mix of named heuristics and Langevin EBM samples."""
+    """Generate a mix of named heuristics and sampled latent strategies."""
 
     heuristic_labels = list(available_heuristic_strategies())
     strategies: list[torch.Tensor] = []
@@ -200,13 +207,18 @@ def generate_candidate_strategies(ebm: EnergyMLP, config: TrainingConfig) -> tor
 
     remaining = config.candidate_strategies - len(strategies)
     if remaining > 0:
-        samples = langevin_sample(
-            ebm,
-            num_samples=remaining,
-            strategy_dim=config.strategy_dim,
-            steps=config.langevin_steps,
-            step_size=config.langevin_step_size,
-        )
+        if config.sampler_type == "langevin":
+            samples = langevin_sample(
+                ebm,
+                num_samples=remaining,
+                strategy_dim=config.strategy_dim,
+                steps=config.langevin_steps,
+                step_size=config.langevin_step_size,
+            )
+        elif config.sampler_type == "gaussian":
+            samples = GaussianStrategySampler(config.strategy_dim, scale=config.gaussian_scale).sample(remaining)
+        else:
+            raise ValueError(f"Unknown sampler_type: {config.sampler_type}")
         strategies.extend([sample for sample in samples])
     return torch.stack(strategies, dim=0)
 
@@ -352,7 +364,10 @@ def update_ebm(
 ) -> dict[str, float]:
     """Train the EBM to assign lower energy to high-scoring buffer strategies."""
 
-    positive = buffer.sample_positive(config.ebm_batch_size, quantile=config.positive_quantile)
+    if config.use_buffer_positives:
+        positive = buffer.sample_positive(config.ebm_batch_size, quantile=config.positive_quantile)
+    else:
+        positive = torch.randn(config.ebm_batch_size, config.strategy_dim)
     negative = langevin_sample(
         ebm,
         num_samples=config.ebm_batch_size,

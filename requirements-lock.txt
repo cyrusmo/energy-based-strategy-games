@@ -1,0 +1,15 @@
+# Paper reproducibility lock for Python 3.11 CPU runs.
+#
+# Regenerate after selecting the submission environment:
+#   python -m pip install -e ".[dev]"
+#   python -m pip freeze > requirements-lock.txt
+#
+# The versions below pin the lightweight public stack used by the scripts.
+numpy==1.26.4
+PyYAML==6.0.2
+matplotlib==3.8.4
+torch==2.3.1
+pytest==8.2.2
+ruff==0.4.10
+mypy==1.10.1
+ipykernel==6.29.5

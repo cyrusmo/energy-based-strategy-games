@@ -1,0 +1,46 @@
+\section{Diagnostic Results Draft}
+
+The current experiments should be interpreted as diagnostics for an inspectable research scaffold.
+They test whether the implementation can expose differences between simple heuristics, model-free learning, and the decomposed strategy loop.
+They do not establish robust multi-agent reasoning or equilibrium convergence.
+
+\subsection{Gridworld Baselines}
+
+The May 15 public snapshot compares four baselines on the default 10 by 10 attacker-defender gridworld.
+The direct-to-goal heuristic reaches the goal in every evaluation episode, with win rate $1.000$ and mean episode return $0.910$.
+The PPO-lite baseline, random policy, and early Day-2 strategy loop all have win rate $0.000$ under the short diagnostic budget.
+Their mean returns are $-1.180$, $-1.208$, and $-1.220$, respectively.
+
+This result is useful because it falsifies an easy overclaim: the current latent strategy loop is not yet a strong controller for the default gridworld.
+For a methods paper, the baseline table should be framed as evidence that the harness can detect trivial but important baselines, not as evidence that the energy-based method is already competitive.
+
+\subsection{Payoff and Strategy Diagnostics}
+
+The named-strategy payoff matrix provides a compact diagnostic for how heuristic strategy embeddings behave against sampled opponent responses.
+It should be plotted as a heatmap and described as sampled-response evaluation.
+The matrix is not an equilibrium computation, and the worst sampled response is not an exact best response over the full policy space.
+
+\subsection{Ablation Protocol}
+
+The paper-facing ablation suite compares Langevin EBM sampling against Gaussian latent sampling, buffer positives against random positives, robustness-aware selection against average-value selection, different candidate counts, different opponent sample counts, and world-model fitting on or off.
+The purpose of these ablations is to identify which parts of the decomposition change diagnostic metrics such as return, win rate, buffer diversity, robustness, and the exploitability proxy.
+The purpose is not to claim state-of-the-art performance.
+
+\section{Limitations Draft}
+
+All game-theoretic metrics in the current scaffold are approximate.
+In particular, the reported \texttt{exploitability\_proxy} is computed against a finite sampled set of heuristic opponent responses.
+It is not Nash exploitability, it is not a CFR or PSRO estimate, and it should not be used as evidence of equilibrium quality.
+
+The energy model is currently a small MLP trained with a contrastive divergence-style objective over buffer positives and sampled negatives.
+It does not use persistent contrastive divergence, a learned proposal distribution, or score matching in the active training loop.
+Reported strategy diversity can be low, and early public snapshots include cases where diversity collapses.
+
+The world model is fit to one-step transitions but is not yet used for imagined rollouts or model-based strategy evaluation.
+Therefore, any claim about model-based reasoning should be deferred until the rollout interface is implemented and evaluated.
+
+The PPO baselines are intentionally lightweight.
+They are useful as live learning baselines and sanity checks, but stronger PPO budgets and multi-seed learning curves are needed before comparing learning efficiency.
+
+The multi-evader pursuit infrastructure is valuable for trace inspection and empirical-game diagnostics, but it is currently a supplementary track.
+It should not be presented as a second EBM-driven domain unless latent strategy generation and sampled-response selection are explicitly integrated into that environment.

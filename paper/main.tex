@@ -1,0 +1,123 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{hyperref}
+
+\title{Learning Generative Strategy Spaces with Energy-Based Models and Game-Theoretic Evaluation for Inspectable Multi-Agent Reasoning}
+\author{Research Scaffold Contributors}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We present an early research system for separating high-level strategy generation from low-level action execution in adversarial multi-agent environments.
+The system combines an energy-based model over latent strategy embeddings, approximate sampled-response evaluation, a strategy-conditioned policy, and lightweight update hooks for policy learning, contrastive energy learning, and one-step world-model fitting.
+The current contribution is methodological and diagnostic: the framework makes strategy generation, evaluation, execution, and update behavior inspectable as separate components.
+We explicitly report approximate metrics and negative diagnostic results; the present system does not claim state-of-the-art performance, Nash convergence, or exact exploitability.
+\end{abstract}
+
+\section{Introduction}
+
+Multi-agent reinforcement learning systems often entangle strategic intent and low-level control in a single policy.
+This makes it difficult to inspect whether failure comes from poor strategy generation, weak opponent evaluation, brittle execution, or unstable learning updates.
+We study a decomposed alternative: generate candidate latent strategies, evaluate them against sampled opponent responses, execute the selected strategy with a conditioned policy, and update the components from rollout data.
+
+The guiding research question is whether high-level strategies can be generated, evaluated, selected, and executed as a distinct layer above low-level policies.
+This paper frames the contribution as an inspectable methods scaffold rather than a performance benchmark.
+
+\section{Related Work}
+
+The project sits at the intersection of energy-based generative models, population and best-response methods for games, latent option or skill discovery, and model-based reinforcement learning.
+The related-work section should cover energy-based models for structured generation, PSRO-style population training, approximate exploitability and regret diagnostics, options or strategy embeddings, and world-model evaluation.
+
+\section{Method}
+
+\subsection{Generate, Evaluate, Execute, Update}
+
+At each iteration, the system executes the following loop.
+\begin{enumerate}
+  \item \textbf{Generate}: sample latent strategy embeddings from an energy model using Langevin dynamics, optionally mixed with named heuristic strategies for debugging.
+  \item \textbf{Evaluate}: score candidates against sampled opponent heuristics using average-case value, worst-case value, a robustness score, and an exploitability proxy.
+  \item \textbf{Execute}: condition a policy on the selected strategy and roll it out in the attacker-defender gridworld.
+  \item \textbf{Update}: store rollout summaries in a strategy buffer and apply lightweight policy, energy-model, and world-model updates.
+\end{enumerate}
+
+\subsection{Energy-Based Strategy Generator}
+
+Let $z \in \mathbb{R}^d$ denote a latent strategy embedding and $E_\theta(z)$ denote a scalar energy.
+Candidate strategies are sampled by unadjusted Langevin dynamics:
+\[
+z_{t+1} = z_t - \frac{\eta}{2}\nabla_z E_\theta(z_t) + \epsilon_t,\quad \epsilon_t \sim \mathcal{N}(0, \eta I).
+\]
+The current implementation uses contrastive divergence-style training with high-scoring buffer strategies as positives and sampled strategies as negatives.
+
+\subsection{Sampled-Response Evaluation}
+
+The evaluator is intentionally approximate.
+For a candidate strategy, it rolls out against a finite set of heuristic opponent responses and records average-case value, worst-case value, robustness, and an exploitability proxy.
+The exploitability proxy is a diagnostic over sampled responses only and must not be interpreted as Nash exploitability.
+
+\subsection{Strategy-Conditioned Execution}
+
+The policy receives both environment state and a latent strategy embedding.
+This design lets the same low-level policy execute different high-level strategies while preserving a separate inspection surface for strategy selection.
+
+\section{Experimental Setup}
+
+\subsection{Primary Environment}
+
+The main environment is a configurable attacker-defender gridworld.
+The attacker starts near one corner and must reach a goal before a greedy defender intercepts it.
+The environment is deliberately small so failures in generation, evaluation, and execution can be inspected directly.
+
+\subsection{Baselines}
+
+We compare the strategy loop against a uniform random attacker, a direct-to-goal heuristic, and a PPO-lite actor-critic attacker.
+The direct-to-goal heuristic is expected to be strong in the default grid layout; its role is to prevent overclaiming from a weak learning baseline.
+
+\subsection{Ablations}
+
+The paper-facing ablation suite covers EBM versus Gaussian sampling, buffer positives versus random positives, robustness-aware versus average-value selection, candidate count, sampled opponent count, and world-model fitting on or off.
+
+\section{Results}
+
+Results should be reported as diagnostics.
+The current public snapshot shows that the direct-to-goal heuristic wins the default gridworld while the early strategy loop and PPO-lite baseline do not.
+This is evidence that the harness can expose failure modes, not evidence of robust multi-agent reasoning.
+
+\begin{table}[h]
+\centering
+\caption{Current public baseline snapshot. Values come from the May 15 diagnostic run and should be replaced by multi-seed results before submission.}
+\begin{tabular}{lrr}
+\toprule
+Baseline & Win rate & Episode return \\
+\midrule
+Direct-goal heuristic & 1.000 & 0.910 \\
+PPO-lite baseline & 0.000 & -1.180 \\
+Day-2 strategy loop & 0.000 & -1.220 \\
+Random policy & 0.000 & -1.208 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The fuller paper-facing results prose is maintained in \texttt{paper/results\_and\_limitations.tex} while the experiment suite is still evolving.
+
+\section{Limitations}
+
+The present system does not claim state-of-the-art performance, convergence to equilibrium, exact Nash exploitability, or robust multi-agent reasoning.
+The evaluator uses sampled opponent responses, the world model is fit only on one-step transitions, and the pursuit/evasion infrastructure is currently a supplementary diagnostic track rather than an EBM-driven domain.
+
+\section{Reproducibility}
+
+The repository includes YAML experiment configs, unit and smoke tests, public JSON artifacts, figure scripts, an ablation runner, and a multi-seed protocol runner.
+Before submission, paper tables should be regenerated from the scripted outputs rather than copied from hand-written snapshots.
+
+\bibliographystyle{plain}
+\bibliography{references}
+
+\end{document}

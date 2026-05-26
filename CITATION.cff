@@ -1,0 +1,14 @@
+cff-version: 1.2.0
+message: "If you use this research scaffold, please cite it using the metadata below."
+title: "Energy-Based Strategy Games"
+authors:
+  - name: "Research Scaffold Contributors"
+version: "0.1.0"
+date-released: "2026-05-24"
+license: "MIT"
+abstract: "A research scaffold for energy-based latent strategy generation, sampled-response game-theoretic evaluation, and inspectable multi-agent reasoning diagnostics."
+keywords:
+  - "energy-based models"
+  - "multi-agent reinforcement learning"
+  - "game-theoretic evaluation"
+  - "strategy generation"

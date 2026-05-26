@@ -28,6 +28,8 @@ def run_from_config(path: str | Path) -> dict[str, object]:
     evaluator_raw = raw.get("evaluator", {})
     policy_raw = raw.get("policy", {})
     world_model_raw = raw.get("world_model", {})
+    sampler_raw = raw.get("sampler", {})
+    selection_raw = raw.get("selection", {})
     updates_raw = raw.get("updates", {})
     config = TrainingConfig(
         seed=int(raw.get("seed", 0)),
@@ -48,6 +50,10 @@ def run_from_config(path: str | Path) -> dict[str, object]:
         grad_clip_norm=float(updates_raw.get("grad_clip_norm", 1.0)),
         ebm_batch_size=int(updates_raw.get("ebm_batch_size", 8)),
         positive_quantile=float(updates_raw.get("positive_quantile", 0.5)),
+        sampler_type=str(sampler_raw.get("type", "langevin")),
+        gaussian_scale=float(sampler_raw.get("scale", 1.0)),
+        robustness_aware_selection=bool(selection_raw.get("robustness_aware", True)),
+        use_buffer_positives=bool(updates_raw.get("use_buffer_positives", True)),
         train_policy=bool(updates_raw.get("train_policy", True)),
         train_ebm=bool(updates_raw.get("train_ebm", True)),
         train_world_model=bool(updates_raw.get("train_world_model", True)),
