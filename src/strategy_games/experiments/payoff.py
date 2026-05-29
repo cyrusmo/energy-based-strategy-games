@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any, cast
 
 import numpy as np
 
@@ -50,9 +51,9 @@ def compute_payoff_matrix(
 def format_payoff_matrix(matrix_result: dict[str, object]) -> str:
     """Format a payoff matrix as aligned text."""
 
-    strategies = list(matrix_result["strategy_labels"])
-    opponents = list(matrix_result["opponent_labels"])
-    matrix = matrix_result["average_reward_matrix"]
+    strategies = list(cast(list[str], matrix_result["strategy_labels"]))
+    opponents = list(cast(list[str], matrix_result["opponent_labels"]))
+    matrix = cast(list[list[Any]], matrix_result["average_reward_matrix"])
     label_width = max(len("strategy"), *(len(str(label)) for label in strategies))
     col_widths = [max(len(str(label)), 8) for label in opponents]
 

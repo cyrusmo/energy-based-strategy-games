@@ -18,6 +18,7 @@ from strategy_games.strategies.buffer import StrategyBuffer, StrategyRecord
 from strategy_games.strategies.embeddings import available_heuristic_strategies, named_strategy_embedding, pairwise_diversity
 from strategy_games.strategies.sampler import GaussianStrategySampler, langevin_sample
 from strategy_games.training.losses import policy_gradient_surrogate, world_model_loss
+from strategy_games.utils.device import resolve_device
 from strategy_games.utils.seeding import set_global_seed
 
 
@@ -50,6 +51,7 @@ class TrainingConfig:
     train_policy: bool = True
     train_ebm: bool = True
     train_world_model: bool = True
+    device: str = "auto"
     env: GridworldConfig = field(default_factory=GridworldConfig)
 
 
@@ -102,21 +104,22 @@ def run_training_loop(config: TrainingConfig | None = None) -> dict[str, object]
 
     config = config or TrainingConfig()
     set_global_seed(config.seed)
+    device = resolve_device(config.device, job="langevin_sampling")
 
     env = AttackerDefenderGridworld(config.env)
-    ebm = EnergyMLP(config.strategy_dim, hidden_dim=config.ebm_hidden_dim)
+    ebm = EnergyMLP(config.strategy_dim, hidden_dim=config.ebm_hidden_dim).to(device=device, dtype=torch.float32)
     policy = StrategyConditionedPolicy(
         env.state_dim,
         config.strategy_dim,
         env.action_dim,
         hidden_dim=config.policy_hidden_dim,
-    )
+    ).to(device=device, dtype=torch.float32)
     world_model = LearnedWorldModel(
         env.state_dim,
         env.action_dim,
         config.strategy_dim,
         hidden_dim=config.world_model_hidden_dim,
-    )
+    ).to(device=device, dtype=torch.float32)
     policy_optimizer = torch.optim.Adam(policy.parameters(), lr=config.policy_lr)
     ebm_optimizer = torch.optim.Adam(ebm.parameters(), lr=config.ebm_lr)
     world_model_optimizer = torch.optim.Adam(world_model.parameters(), lr=config.world_model_lr)
@@ -194,16 +197,18 @@ def run_training_loop(config: TrainingConfig | None = None) -> dict[str, object]
         "buffer_size": len(buffer),
         "buffer_diversity": buffer.diversity(),
         "final_selected_label": history[-1]["selected_label"] if history else None,
+        "device": str(device),
     }
 
 
 def generate_candidate_strategies(ebm: EnergyMLP, config: TrainingConfig) -> torch.Tensor:
     """Generate a mix of named heuristics and sampled latent strategies."""
 
+    device = next(ebm.parameters()).device
     heuristic_labels = list(available_heuristic_strategies())
     strategies: list[torch.Tensor] = []
     for label in heuristic_labels[: config.candidate_strategies]:
-        strategies.append(named_strategy_embedding(label, config.strategy_dim).vector)
+        strategies.append(named_strategy_embedding(label, config.strategy_dim, device=device).vector)
 
     remaining = config.candidate_strategies - len(strategies)
     if remaining > 0:
@@ -214,9 +219,12 @@ def generate_candidate_strategies(ebm: EnergyMLP, config: TrainingConfig) -> tor
                 strategy_dim=config.strategy_dim,
                 steps=config.langevin_steps,
                 step_size=config.langevin_step_size,
+                device=device,
             )
         elif config.sampler_type == "gaussian":
-            samples = GaussianStrategySampler(config.strategy_dim, scale=config.gaussian_scale).sample(remaining)
+            samples = GaussianStrategySampler(config.strategy_dim, scale=config.gaussian_scale).sample(
+                remaining, device=device
+            )
         else:
             raise ValueError(f"Unknown sampler_type: {config.sampler_type}")
         strategies.extend([sample for sample in samples])
@@ -226,7 +234,7 @@ def generate_candidate_strategies(ebm: EnergyMLP, config: TrainingConfig) -> tor
 def candidate_labels(num_candidates: int) -> list[str | None]:
     """Labels aligned with the heuristic-first candidate generator."""
 
-    labels: list[str | None] = list(available_heuristic_strategies())[:num_candidates]
+    labels: list[str | None] = [label for label in list(available_heuristic_strategies())[:num_candidates]]
     while len(labels) < num_candidates:
         labels.append(None)
     return labels
@@ -253,15 +261,16 @@ def collect_policy_rollout(
     done = False
     trajectory = Trajectory()
     while not done:
-        state = torch.as_tensor(obs, dtype=torch.float32)
-        strategy_batch = strategy.detach().float().unsqueeze(0)
+        device = next(policy.parameters()).device
+        state = torch.as_tensor(obs, dtype=torch.float32, device=device)
+        strategy_batch = strategy.detach().float().to(device).unsqueeze(0)
         logits = policy(state.unsqueeze(0), strategy_batch)
         distribution = Categorical(logits=logits)
         action_tensor = distribution.sample()
         action = int(action_tensor.item())
 
         result = env.step(action)
-        next_state = torch.as_tensor(result.observation, dtype=torch.float32)
+        next_state = torch.as_tensor(result.observation, dtype=torch.float32, device=device)
 
         trajectory.states.append(state.detach())
         trajectory.actions.append(action)
@@ -312,7 +321,7 @@ def update_policy(
 
     log_probs = torch.stack(trajectory.log_probs)
     entropies = torch.stack(trajectory.entropies)
-    returns = discounted_returns(trajectory.rewards, gamma=config.gamma)
+    returns = discounted_returns(trajectory.rewards, gamma=config.gamma).to(log_probs.device)
     advantages = normalize_advantages(returns)
     loss = policy_gradient_surrogate(log_probs, advantages) - config.entropy_coef * entropies.mean()
 
@@ -336,12 +345,14 @@ def update_world_model(
 ) -> dict[str, float]:
     """Fit the placeholder world model on observed one-step transitions."""
 
-    states = torch.stack(trajectory.states)
-    next_states = torch.stack(trajectory.next_states)
-    actions = torch.tensor(trajectory.actions, dtype=torch.long)
+    device = next(world_model.parameters()).device
+    states = torch.stack(trajectory.states).to(device)
+    next_states = torch.stack(trajectory.next_states).to(device)
+    actions = torch.tensor(trajectory.actions, dtype=torch.long, device=device)
     action_one_hot = F.one_hot(actions, num_classes=world_model.action_dim).float()
     strategy_batch = selected_strategy.detach().float().unsqueeze(0).expand(states.shape[0], -1)
-    rewards = torch.tensor(trajectory.rewards, dtype=torch.float32)
+    strategy_batch = strategy_batch.to(device)
+    rewards = torch.tensor(trajectory.rewards, dtype=torch.float32, device=device)
 
     predicted_delta, predicted_reward = world_model(states, action_one_hot, strategy_batch)
     loss = world_model_loss(predicted_delta, next_states - states, predicted_reward, rewards)
@@ -365,15 +376,18 @@ def update_ebm(
     """Train the EBM to assign lower energy to high-scoring buffer strategies."""
 
     if config.use_buffer_positives:
-        positive = buffer.sample_positive(config.ebm_batch_size, quantile=config.positive_quantile)
+        positive = buffer.sample_positive(config.ebm_batch_size, quantile=config.positive_quantile).to(
+            next(ebm.parameters()).device
+        )
     else:
-        positive = torch.randn(config.ebm_batch_size, config.strategy_dim)
+        positive = torch.randn(config.ebm_batch_size, config.strategy_dim, device=next(ebm.parameters()).device)
     negative = langevin_sample(
         ebm,
         num_samples=config.ebm_batch_size,
         strategy_dim=config.strategy_dim,
         steps=config.langevin_steps,
         step_size=config.langevin_step_size,
+        device=next(ebm.parameters()).device,
     )
     positive_energy = ebm(positive).detach().mean()
     negative_energy = ebm(negative).detach().mean()

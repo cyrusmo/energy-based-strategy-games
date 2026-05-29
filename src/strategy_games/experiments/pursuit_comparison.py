@@ -308,7 +308,7 @@ def format_policy_comparison_summary(result: Mapping[str, Any]) -> str:
     policies = [str(policy) for policy in result["pursuer_policies"]]
     empirical = result["empirical_game"]
     probabilities = empirical["payoff_weighted_row_policy_ranking_distribution"]["probabilities"]
-    rows = []
+    rows: list[dict[str, float | str]] = []
     for idx, policy in enumerate(policies):
         rows.append(
             {
@@ -321,10 +321,7 @@ def format_policy_comparison_summary(result: Mapping[str, Any]) -> str:
         )
 
     fields = ("pursuer_policy", "payoff_uniform", "worst_case", "regret_uniform", "ranking_prob")
-    widths = {
-        field: max(len(field), *(len(_format_table_value(row[field])) for row in rows))
-        for field in fields
-    }
+    widths = {field: max(len(field), *(len(_format_table_value(row[field])) for row in rows)) for field in fields}
     header = "  ".join(field.ljust(widths[field]) for field in fields)
     separator = "  ".join("-" * widths[field] for field in fields)
     body = [

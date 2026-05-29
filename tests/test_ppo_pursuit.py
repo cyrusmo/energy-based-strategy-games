@@ -89,6 +89,8 @@ def test_tiny_ppo_pursuer_training_writes_public_metrics_and_private_checkpoint(
     assert "checkpoint_path" not in metrics
     assert "checkpoint_path" not in public_config
     assert metrics["train_metrics"]["updates"] == 1
+    assert len(metrics["update_history"]) == 1
+    assert "policy_loss" in metrics["update_history"][0]
     assert metrics["eval_metrics"]["episodes"] == pytest.approx(2.0)
     assert all(
         torch.isfinite(torch.tensor(float(metrics["eval_metrics"][key])))

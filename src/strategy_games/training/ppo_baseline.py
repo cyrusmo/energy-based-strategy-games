@@ -22,6 +22,7 @@ from torch.nn import functional as F
 from strategy_games.envs.gridworld import AttackerDefenderGridworld, GridworldConfig, greedy_action_towards
 from strategy_games.models.policy import RandomPolicy
 from strategy_games.utils.config import load_config
+from strategy_games.utils.device import resolve_device
 from strategy_games.utils.seeding import set_global_seed
 
 
@@ -43,6 +44,7 @@ class PPOConfig:
     entropy_coef: float = 0.01
     grad_clip_norm: float = 0.5
     eval_episodes: int = 5
+    device: str = "auto"
     env: GridworldConfig = field(default_factory=GridworldConfig)
 
 
@@ -123,7 +125,7 @@ def run_random_policy_baseline(
         env.reset()
         done = False
         total = 0.0
-        info = {"outcome": "running"}
+        info: dict[str, object] = {"outcome": "running"}
         while not done:
             result = env.step(policy.act())
             total += result.reward
@@ -147,7 +149,7 @@ def run_direct_goal_baseline(episodes: int = 5, env_config: GridworldConfig | No
         env.reset()
         done = False
         total = 0.0
-        info = {"outcome": "running"}
+        info: dict[str, object] = {"outcome": "running"}
         while not done:
             action = greedy_action_towards(env.attacker_pos, env.goal_pos)
             result = env.step(action)
@@ -159,15 +161,18 @@ def run_direct_goal_baseline(episodes: int = 5, env_config: GridworldConfig | No
     return _summarize(returns, outcomes)
 
 
-def train_ppo_baseline(config: PPOConfig | None = None) -> dict[str, float | int]:
+def train_ppo_baseline(config: PPOConfig | None = None) -> dict[str, Any]:
     """Train a PPO-lite actor-critic and return public scalar metrics."""
 
     config = config or PPOConfig()
     _validate_ppo_config(config)
     set_global_seed(config.seed)
+    device = resolve_device(config.device, job="ppo_update")
 
     env = AttackerDefenderGridworld(config.env)
-    policy = ActorCriticPolicy(env.state_dim, env.action_dim, hidden_dim=config.hidden_dim)
+    policy = ActorCriticPolicy(env.state_dim, env.action_dim, hidden_dim=config.hidden_dim).to(
+        device=device, dtype=torch.float32
+    )
     optimizer = torch.optim.Adam(policy.parameters(), lr=config.learning_rate)
 
     observation = env.reset()
@@ -175,6 +180,7 @@ def train_ppo_baseline(config: PPOConfig | None = None) -> dict[str, float | int
     train_returns: list[float] = []
     train_outcomes: list[str] = []
     last_update = {"policy_loss": 0.0, "value_loss": 0.0, "entropy": 0.0}
+    update_history: list[dict[str, float | int]] = []
     steps_done = 0
     updates = 0
 
@@ -204,6 +210,16 @@ def train_ppo_baseline(config: PPOConfig | None = None) -> dict[str, float | int
         last_update = update_ppo_policy(policy, optimizer, batch, returns, advantages, config)
         steps_done += steps_this_batch
         updates += 1
+        update_history.append(
+            {
+                "update": int(updates),
+                "steps_done": int(steps_done),
+                "policy_loss": float(last_update["policy_loss"]),
+                "value_loss": float(last_update["value_loss"]),
+                "entropy": float(last_update["entropy"]),
+                "train_episode_return": float(np.mean(batch.episode_returns)) if batch.episode_returns else 0.0,
+            }
+        )
 
     eval_metrics = evaluate_ppo_policy(policy, config.env, episodes=config.eval_episodes)
     return {
@@ -215,6 +231,8 @@ def train_ppo_baseline(config: PPOConfig | None = None) -> dict[str, float | int
         "train_episodes": int(len(train_returns)),
         "updates": int(updates),
         "total_steps": int(steps_done),
+        "device": str(device),
+        "update_history": update_history,
     }
 
 
@@ -253,9 +271,10 @@ def collect_ppo_rollout(
     episode_returns: list[float] = []
     episode_outcomes: list[str] = []
     last_done = False
+    device = next(policy.parameters()).device
 
     for _ in range(steps):
-        state = torch.as_tensor(observation, dtype=torch.float32)
+        state = torch.as_tensor(observation, dtype=torch.float32, device=device)
         with torch.no_grad():
             logits, value = policy(state.unsqueeze(0))
             distribution = Categorical(logits=logits)
@@ -285,8 +304,8 @@ def collect_ppo_rollout(
         actions=torch.stack(actions).long(),
         old_log_probs=torch.stack(old_log_probs).detach(),
         values=torch.stack(values).detach(),
-        rewards=torch.tensor(rewards, dtype=torch.float32),
-        dones=torch.tensor(dones, dtype=torch.float32),
+        rewards=torch.tensor(rewards, dtype=torch.float32, device=device),
+        dones=torch.tensor(dones, dtype=torch.float32, device=device),
         last_observation=observation,
         last_done=last_done,
         episode_returns=episode_returns,
@@ -299,8 +318,8 @@ def bootstrap_value(policy: ActorCriticPolicy, observation: np.ndarray, done: bo
     """Return the bootstrap value for an unfinished rollout."""
 
     if done:
-        return torch.zeros((), dtype=torch.float32)
-    state = torch.as_tensor(observation, dtype=torch.float32).unsqueeze(0)
+        return torch.zeros((), dtype=torch.float32, device=next(policy.parameters()).device)
+    state = torch.as_tensor(observation, dtype=torch.float32, device=next(policy.parameters()).device).unsqueeze(0)
     with torch.no_grad():
         _, value = policy(state)
     return value.squeeze(0).detach()
@@ -319,7 +338,7 @@ def generalized_advantage_estimate(
     if rewards.shape != dones.shape or rewards.shape != values.shape:
         raise ValueError("rewards, dones, and values must have matching shapes")
     advantages = torch.zeros_like(rewards)
-    gae = torch.zeros((), dtype=torch.float32)
+    gae = torch.zeros((), dtype=torch.float32, device=rewards.device)
     for step in reversed(range(rewards.shape[0])):
         next_value = last_value if step == rewards.shape[0] - 1 else values[step + 1]
         next_non_terminal = 1.0 - dones[step]
@@ -387,7 +406,7 @@ def update_ppo_policy(
     stats: list[dict[str, float]] = []
 
     for _ in range(config.update_epochs):
-        for indices in torch.randperm(batch_size).split(minibatch_size):
+        for indices in torch.randperm(batch_size, device=batch.states.device).split(minibatch_size):
             loss, loss_stats = ppo_loss(
                 policy=policy,
                 states=batch.states[indices],
@@ -424,14 +443,15 @@ def evaluate_ppo_policy(
     env_config = env_config or GridworldConfig()
     returns: list[float] = []
     outcomes: list[str] = []
+    device = next(policy.parameters()).device
     for _ in range(episodes):
         env = AttackerDefenderGridworld(env_config)
         observation = env.reset()
         done = False
         total = 0.0
-        info = {"outcome": "running"}
+        info: dict[str, object] = {"outcome": "running"}
         while not done:
-            state = torch.as_tensor(observation, dtype=torch.float32)
+            state = torch.as_tensor(observation, dtype=torch.float32, device=device)
             action = policy.act(state, deterministic=True)
             result = env.step(action)
             observation = result.observation
@@ -446,12 +466,10 @@ def evaluate_ppo_policy(
 def ppo_config_from_mapping(raw: Mapping[str, Any]) -> PPOConfig:
     """Build a typed PPO config from a YAML-style mapping."""
 
-    env_raw = raw.get("env", {})
-    ppo_raw = raw.get("ppo", {})
-    if not isinstance(env_raw, Mapping):
-        env_raw = {}
-    if not isinstance(ppo_raw, Mapping):
-        ppo_raw = {}
+    env_value = raw.get("env", {})
+    ppo_value = raw.get("ppo", {})
+    env_raw: Mapping[str, Any] = env_value if isinstance(env_value, Mapping) else {}
+    ppo_raw: Mapping[str, Any] = ppo_value if isinstance(ppo_value, Mapping) else {}
     return PPOConfig(
         seed=int(raw.get("seed", 11)),
         total_steps=int(ppo_raw.get("total_steps", 512)),
@@ -467,6 +485,7 @@ def ppo_config_from_mapping(raw: Mapping[str, Any]) -> PPOConfig:
         entropy_coef=float(ppo_raw.get("entropy_coef", 0.01)),
         grad_clip_norm=float(ppo_raw.get("grad_clip_norm", 0.5)),
         eval_episodes=int(ppo_raw.get("eval_episodes", 5)),
+        device=str(raw.get("device", ppo_raw.get("device", "auto"))),
         env=_gridworld_config_from_mapping(env_raw),
     )
 

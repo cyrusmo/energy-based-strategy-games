@@ -27,6 +27,7 @@ from strategy_games.policies.pursuit_targets import PursuitActorCritic
 from strategy_games.policies.scripted_pursuit import scripted_pursuit_actions
 from strategy_games.rollouts import multi_evader_config_from_mapping
 from strategy_games.utils.config import load_config
+from strategy_games.utils.device import resolve_device
 from strategy_games.utils.seeding import set_global_seed
 
 
@@ -57,6 +58,7 @@ class PursuitPPOConfig:
     output_dir: Path = Path("outputs/public/pursuit_models/ppo_pursuer")
     checkpoint_path: Path = Path("outputs/private/checkpoints/ppo_pursuer.pt")
     save_checkpoint: bool = True
+    device: str = "auto"
     env: MultiEvaderPursuitConfig = field(default_factory=MultiEvaderPursuitConfig)
 
 
@@ -82,10 +84,13 @@ def train_ppo_pursuer(config: PursuitPPOConfig | None = None) -> dict[str, Any]:
     spec = PursuitObservationSpec(role="pursuer", max_pursuers=config.max_pursuers, max_evaders=config.max_evaders)
     _validate_pursuit_ppo_config(config, spec)
     set_global_seed(config.seed)
+    device = resolve_device(config.device, job="ppo_update")
 
     env = MultiEvaderPursuitEnv(config.env)
     validate_pursuit_ppo_env(env, spec)
-    model = PursuitActorCritic(obs_dim=spec.obs_dim, action_dim=len(ACTIONS), hidden_dim=config.hidden_dim)
+    model = PursuitActorCritic(obs_dim=spec.obs_dim, action_dim=len(ACTIONS), hidden_dim=config.hidden_dim).to(
+        device=device, dtype=torch.float32
+    )
     optimizer = torch.optim.Adam(model.parameters(), lr=config.learning_rate)
 
     rng = np.random.default_rng(config.seed)
@@ -93,8 +98,9 @@ def train_ppo_pursuer(config: PursuitPPOConfig | None = None) -> dict[str, Any]:
     running_episode_return = 0.0
     train_episode_summaries: list[dict[str, float]] = []
     loss_stats = {"policy_loss": 0.0, "value_loss": 0.0, "entropy": 0.0}
+    update_history: list[dict[str, float | int]] = []
 
-    for _ in range(config.num_updates):
+    for update_idx in range(config.num_updates):
         batch = collect_pursuit_ppo_rollout(
             env=env,
             model=model,
@@ -117,6 +123,15 @@ def train_ppo_pursuer(config: PursuitPPOConfig | None = None) -> dict[str, Any]:
             gae_lambda=config.gae_lambda,
         )
         loss_stats = update_pursuit_ppo_policy(model, optimizer, batch, returns, advantages, config)
+        update_history.append(
+            {
+                "update": int(update_idx + 1),
+                "policy_loss": float(loss_stats["policy_loss"]),
+                "value_loss": float(loss_stats["value_loss"]),
+                "entropy": float(loss_stats["entropy"]),
+                "train_mean_pursuer_return": float(np.mean(batch.episode_returns)) if batch.episode_returns else 0.0,
+            }
+        )
 
     train_metrics = summarize_pursuit_episodes(train_episode_summaries)
     train_metrics.update(loss_stats)
@@ -136,8 +151,10 @@ def train_ppo_pursuer(config: PursuitPPOConfig | None = None) -> dict[str, Any]:
         "action_space": list(ACTIONS),
         "eval_seeds": list(config.eval_seeds),
         "checkpoint_written": checkpoint_written,
+        "device": str(device),
         "train_metrics": train_metrics,
         "eval_metrics": eval_metrics,
+        "update_history": update_history,
     }
     write_pursuit_ppo_artifacts(config, artifact)
     return artifact
@@ -163,9 +180,10 @@ def collect_pursuit_ppo_rollout(
     dones: list[bool] = []
     episode_returns: list[float] = []
     episode_summaries: list[dict[str, float]] = []
+    device = next(model.parameters()).device
 
     for _ in range(steps):
-        obs = torch.as_tensor(encode_pursuer_observation(env, "pursuer_0", spec), dtype=torch.float32)
+        obs = torch.as_tensor(encode_pursuer_observation(env, "pursuer_0", spec), dtype=torch.float32, device=device)
         with torch.no_grad():
             logits, value = model(obs.unsqueeze(0))
             distribution = Categorical(logits=logits)
@@ -204,8 +222,8 @@ def collect_pursuit_ppo_rollout(
         actions=torch.stack(actions).long(),
         old_log_probs=torch.stack(old_log_probs).detach(),
         values=torch.stack(values).detach(),
-        rewards=torch.tensor(rewards, dtype=torch.float32),
-        dones=torch.tensor(dones, dtype=torch.float32),
+        rewards=torch.tensor(rewards, dtype=torch.float32, device=device),
+        dones=torch.tensor(dones, dtype=torch.float32, device=device),
         episode_returns=episode_returns,
         episode_summaries=episode_summaries,
         running_episode_return=float(running_episode_return),
@@ -216,8 +234,12 @@ def bootstrap_pursuit_value(model: PursuitActorCritic, env: MultiEvaderPursuitEn
     """Bootstrap current state value unless the environment is terminated."""
 
     if env.done:
-        return torch.zeros((), dtype=torch.float32)
-    obs = torch.as_tensor(encode_pursuer_observation(env, "pursuer_0", spec), dtype=torch.float32).unsqueeze(0)
+        return torch.zeros((), dtype=torch.float32, device=next(model.parameters()).device)
+    obs = torch.as_tensor(
+        encode_pursuer_observation(env, "pursuer_0", spec),
+        dtype=torch.float32,
+        device=next(model.parameters()).device,
+    ).unsqueeze(0)
     with torch.no_grad():
         _, value = model(obs)
     return value.squeeze(0).detach()
@@ -236,7 +258,7 @@ def generalized_advantage_estimate(
     if rewards.shape != dones.shape or rewards.shape != values.shape:
         raise ValueError("rewards, dones, and values must have matching shapes")
     advantages = torch.zeros_like(rewards)
-    gae = torch.zeros((), dtype=torch.float32)
+    gae = torch.zeros((), dtype=torch.float32, device=rewards.device)
     for step in reversed(range(rewards.shape[0])):
         next_value = last_value if step == rewards.shape[0] - 1 else values[step + 1]
         next_non_terminal = 1.0 - dones[step]
@@ -300,7 +322,7 @@ def update_pursuit_ppo_policy(
     minibatch_size = min(config.minibatch_size, batch_size)
     stats: list[dict[str, float]] = []
     for _ in range(config.update_epochs):
-        for indices in torch.randperm(batch_size).split(minibatch_size):
+        for indices in torch.randperm(batch_size, device=batch.observations.device).split(minibatch_size):
             loss, loss_stats = pursuit_ppo_loss(
                 model=model,
                 observations=batch.observations[indices],
@@ -331,13 +353,16 @@ def evaluate_ppo_pursuer(
     """Evaluate PPO pursuer deterministically over fixed seeds."""
 
     summaries: list[dict[str, float]] = []
+    device = next(model.parameters()).device
     for seed in config.eval_seeds:
         env = MultiEvaderPursuitEnv(config.env)
         validate_pursuit_ppo_env(env, spec)
         env.reset()
         rng = np.random.default_rng(seed)
         while not env.done:
-            obs = torch.as_tensor(encode_pursuer_observation(env, "pursuer_0", spec), dtype=torch.float32)
+            obs = torch.as_tensor(
+                encode_pursuer_observation(env, "pursuer_0", spec), dtype=torch.float32, device=device
+            )
             action = ACTIONS[model.act(obs, deterministic=True)]
             scripted = scripted_pursuit_actions(
                 env=env,
@@ -412,6 +437,7 @@ def pursuit_ppo_config_from_mapping(raw: Mapping[str, Any]) -> PursuitPPOConfig:
         output_dir=Path(str(output_raw.get("public_dir", "outputs/public/pursuit_models/ppo_pursuer"))),
         checkpoint_path=Path(str(output_raw.get("checkpoint_path", "outputs/private/checkpoints/ppo_pursuer.pt"))),
         save_checkpoint=bool(output_raw.get("save_checkpoint", True)),
+        device=str(raw.get("device", ppo_raw.get("device", "auto"))),
         env=multi_evader_config_from_mapping(env_raw),
     )
 
@@ -433,7 +459,7 @@ def save_pursuit_ppo_checkpoint(
     output_path = Path(path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     checkpoint = {
-        "model_state_dict": model.state_dict(),
+        "model_state_dict": {key: value.detach().cpu() for key, value in model.state_dict().items()},
         "observation_schema": OBSERVATION_SCHEMA,
         "action_space": list(ACTIONS),
         "max_pursuers": spec.max_pursuers,

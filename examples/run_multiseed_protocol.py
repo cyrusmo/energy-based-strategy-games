@@ -10,10 +10,10 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-import numpy as np
 import yaml
 
 from strategy_games.experiments.baselines import BASELINE_FIELDS, compare_baselines
+from strategy_games.experiments.convergence import multiseed_confidence
 from strategy_games.experiments.logging import to_jsonable
 from strategy_games.utils.config import load_config
 
@@ -100,8 +100,11 @@ def summarize_by_baseline(rows: list[dict[str, Any]]) -> dict[str, Any]:
         }
         for field in BASELINE_FIELDS[1:]:
             values = [float(item[field]) for item in items]
-            result[f"{field}_mean"] = float(np.mean(values))
-            result[f"{field}_std"] = float(np.std(values))
+            confidence = multiseed_confidence(values)
+            result[f"{field}_mean"] = float(confidence["mean"])
+            result[f"{field}_std"] = float(confidence["std"])
+            result[f"{field}_ci_low"] = float(confidence["ci_low"])
+            result[f"{field}_ci_high"] = float(confidence["ci_high"])
         summary_rows.append(result)
     return {
         "baselines": sorted(summary_rows, key=lambda item: str(item["baseline"])),

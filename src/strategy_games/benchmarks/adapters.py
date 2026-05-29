@@ -63,7 +63,7 @@ class CustomGridworldBenchmarkAdapter:
             seed=seed,
             total_reward=total_reward,
             outcome=str(info["outcome"]),
-            steps=int(info["steps"]),
+            steps=_safe_int(info.get("steps", 0)),
             elapsed=time.perf_counter() - start,
             strategy_label="uniform_random",
         )
@@ -85,7 +85,7 @@ class CustomGridworldBenchmarkAdapter:
             seed=seed,
             total_reward=total_reward,
             outcome=str(info["outcome"]),
-            steps=int(info["steps"]),
+            steps=_safe_int(info.get("steps", 0)),
             elapsed=time.perf_counter() - start,
             strategy_label="direct_goal",
         )
@@ -121,7 +121,7 @@ class CustomGridworldBenchmarkAdapter:
             average_case_value=float(selection_metrics["average_case_value"]),
             worst_case_value=float(selection_metrics["worst_case_value"]),
             exploitability_proxy=float(selection_metrics["exploitability_proxy"]),
-            strategy_diversity=float(result["buffer_diversity"]),
+            strategy_diversity=_safe_float(result.get("buffer_diversity", 0.0)),
             wall_clock_seconds=time.perf_counter() - start,
         )
 
@@ -246,6 +246,7 @@ def _training_config(raw: Mapping[str, Any], env_config: GridworldConfig) -> Tra
         langevin_step_size=float(ebm.get("langevin_step_size", 0.02)),
         ebm_batch_size=int(updates.get("ebm_batch_size", 4)),
         episodes_per_opponent=int(raw.get("evaluator", {}).get("episodes_per_opponent", 1)),
+        device=str(raw.get("device", "auto")),
         env=env_config,
     )
 
@@ -273,8 +274,17 @@ def _replace_training_seed(config: TrainingConfig, seed: int) -> TrainingConfig:
         train_policy=config.train_policy,
         train_ebm=config.train_ebm,
         train_world_model=config.train_world_model,
+        device=config.device,
         env=config.env,
     )
+
+
+def _safe_int(value: object, default: int = 0) -> int:
+    return int(value) if isinstance(value, int | float | str) else default
+
+
+def _safe_float(value: object, default: float = 0.0) -> float:
+    return float(value) if isinstance(value, int | float | str) else default
 
 
 def _pettingzoo_action(env: Any, agent: str, baseline: str, step: int, rng: np.random.Generator) -> int:

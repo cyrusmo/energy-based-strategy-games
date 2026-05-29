@@ -68,10 +68,12 @@ def test_tiny_ppo_training_smoke() -> None:
         "entropy",
         "episodes",
         "updates",
+        "update_history",
     ):
         assert key in result
     assert result["episodes"] == 1
     assert result["updates"] >= 1
+    assert len(result["update_history"]) == result["updates"]
 
 
 def test_ppo_config_runner_writes_metrics(tmp_path) -> None:
@@ -106,6 +108,7 @@ def test_ppo_config_runner_writes_metrics(tmp_path) -> None:
     saved = json.loads(metrics_path.read_text(encoding="utf-8"))
     assert saved["episodes"] == 1
     assert "policy_loss" in saved
+    assert "update_history" in saved
 
 
 def _tiny_ppo_config() -> PPOConfig:

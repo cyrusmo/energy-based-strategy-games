@@ -57,6 +57,7 @@ def run_from_config(path: str | Path) -> dict[str, object]:
         train_policy=bool(updates_raw.get("train_policy", True)),
         train_ebm=bool(updates_raw.get("train_ebm", True)),
         train_world_model=bool(updates_raw.get("train_world_model", True)),
+        device=str(raw.get("device", "auto")),
         env=env,
     )
     result = run_training_loop(config)

@@ -107,10 +107,12 @@ class GameTheoreticEvaluator:
             done = result.done
             info = result.info
 
+        raw_steps = info.get("steps", 0)
+        steps = int(raw_steps) if isinstance(raw_steps, int | float | str) else 0
         return RolloutResult(
             total_reward=float(total_reward),
             outcome=str(info["outcome"]),
-            steps=int(info["steps"]),
+            steps=steps,
             opponent_label=opponent_label,
         )
 

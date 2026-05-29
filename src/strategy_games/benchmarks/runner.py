@@ -8,11 +8,11 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-import numpy as np
 import yaml
 
 from strategy_games.benchmarks.registry import make_benchmark_adapter
 from strategy_games.benchmarks.types import BenchmarkDependencyError
+from strategy_games.experiments.convergence import multiseed_confidence
 from strategy_games.experiments.logging import to_jsonable
 from strategy_games.utils.config import load_config
 
@@ -91,10 +91,13 @@ def summarize_benchmark_results(rows: list[dict[str, object]]) -> dict[str, obje
             "exploitability_proxy",
             "strategy_diversity",
         ):
-            values = [float(item[key]) for item in items if item.get(key) is not None]
+            values = [_safe_float(item[key]) for item in items if item.get(key) is not None]
             if values:
-                summary[f"mean_{key}"] = float(np.mean(values))
-                summary[f"std_{key}"] = float(np.std(values))
+                confidence = multiseed_confidence(values)
+                summary[f"mean_{key}"] = float(confidence["mean"])
+                summary[f"std_{key}"] = float(confidence["std"])
+                summary[f"ci_low_{key}"] = float(confidence["ci_low"])
+                summary[f"ci_high_{key}"] = float(confidence["ci_high"])
         summaries.append(summary)
     return {"by_env_and_baseline": summaries}
 
@@ -112,8 +115,10 @@ def write_benchmark_artifacts(result: Mapping[str, object], config: Mapping[str,
 
     results_path = run_dir / "results.jsonl"
     with results_path.open("w", encoding="utf-8") as handle:
-        for row in result.get("results", []):
-            handle.write(json.dumps(to_jsonable(row), sort_keys=True) + "\n")
+        rows = result.get("results", [])
+        if isinstance(rows, list):
+            for row in rows:
+                handle.write(json.dumps(to_jsonable(row), sort_keys=True) + "\n")
 
     summary_path = run_dir / "summary.json"
     with summary_path.open("w", encoding="utf-8") as handle:
@@ -130,3 +135,9 @@ def write_benchmark_artifacts(result: Mapping[str, object], config: Mapping[str,
         "summary_json": str(summary_path),
         "config_yaml": str(config_path),
     }
+
+
+def _safe_float(value: object) -> float:
+    if isinstance(value, int | float | str):
+        return float(value)
+    return 0.0

@@ -11,6 +11,8 @@ import numpy as np
 import torch
 import yaml
 
+from strategy_games.experiments.convergence import summarize_convergence
+
 
 class ExperimentLogger:
     """Write public experiment artifacts to a run directory."""
@@ -104,6 +106,7 @@ def summarize_training_result(result: Mapping[str, Any]) -> dict[str, Any]:
         "mean_catch_rate": _mean_metric(rollouts, "catch_rate"),
         "mean_timeout_rate": _mean_metric(rollouts, "timeout_rate"),
         "final_update_losses": final_updates,
+        "convergence": summarize_convergence([item for item in history if isinstance(item, Mapping)]),
     }
 
 

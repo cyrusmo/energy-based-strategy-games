@@ -60,6 +60,8 @@ python examples/export_pursuit_trace.py --config configs/demo/custom_2_evader_9x
 python examples/compare_pursuit_policies.py
 python examples/train_ppo_pursuer.py --config configs/demo/ppo_pursuer_smoke.yaml
 python examples/compare_pursuit_policies.py --include-learned-pursuer outputs/private/checkpoints/ppo_pursuer.pt
+python examples/calibrate_device.py
+streamlit run examples/performance_dashboard.py
 ```
 
 Expected outputs are small JSON-like metric dictionaries, sampled strategy shapes and energies, evaluator summaries for named strategies, a short training-loop history, public artifact files under `outputs/public/`, a rollout trace PNG, a PPO-lite baseline metrics file, a baseline metric table, a named-strategy payoff matrix, and a validated pursuit/evasion `trace.json`. The commands are designed to finish quickly on CPU.
@@ -71,6 +73,16 @@ streamlit run examples/pursuit_trace_viewer.py
 ```
 
 This viewer is intended for inspecting environment dynamics, scripted policy behavior, and trace-level metrics. It does not demonstrate learned robustness, optimality, or exact game-theoretic guarantees.
+
+To inspect resource use, convergence, and baseline quality in one novice-friendly dashboard:
+
+```bash
+python examples/calibrate_device.py
+python examples/run_multiseed_protocol.py --seeds 0 1 --episodes 2 --no-ppo
+streamlit run examples/performance_dashboard.py
+```
+
+The dashboard reads public artifacts under `outputs/public/` and is explicit when an artifact is missing. Device recommendations are empirical: on Apple Silicon, MPS can help batched tensor jobs but CPU may still be faster for tiny rollout-heavy workloads.
 
 ## Key Metrics
 
