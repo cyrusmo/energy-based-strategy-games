@@ -1,11 +1,28 @@
 """Generate paper-facing figures from public experiment APIs/artifacts."""
 
+# ruff: noqa: E402
+
 from __future__ import annotations
 
 import argparse
 import json
+import os
+import subprocess
+import sys
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+
+_MPLCONFIGDIR = Path("outputs/public/.matplotlib").resolve()
+_MPLCONFIGDIR.mkdir(parents=True, exist_ok=True)
+os.environ.setdefault("MPLCONFIGDIR", str(_MPLCONFIGDIR))
+_XDG_CACHE_HOME = Path("outputs/public/.cache").resolve()
+_XDG_CACHE_HOME.mkdir(parents=True, exist_ok=True)
+os.environ.setdefault("XDG_CACHE_HOME", str(_XDG_CACHE_HOME))
+
+import matplotlib
+
+matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -30,8 +47,13 @@ def main() -> None:
     draw_baseline_bars(args.baseline_json, args.output_dir / "baseline_comparison.png", compute=not args.no_compute)
     draw_payoff_heatmap(args.payoff_json, args.output_dir / "payoff_matrix.png", compute=not args.no_compute)
     draw_embedding_projection(args.output_dir / "strategy_embedding_projection.png")
-    draw_ablation_summary(args.ablation_json, args.output_dir / "ablation_summary.png")
-    write_manifest(args.output_dir)
+    draw_ablation_summary(args.ablation_json, args.output_dir / "ablation_summary.png", compute=not args.no_compute)
+    write_manifest(
+        args.output_dir,
+        source_artifacts=[args.baseline_json, args.payoff_json, args.ablation_json],
+        command=["python", "scripts/make_paper_figures.py", *sys.argv[1:]],
+        is_smoke=args.no_compute,
+    )
 
 
 def draw_architecture(path: Path) -> None:
@@ -153,9 +175,11 @@ def draw_embedding_projection(figure_path: Path) -> None:
     save_figure(fig, figure_path)
 
 
-def draw_ablation_summary(json_path: Path, figure_path: Path) -> None:
+def draw_ablation_summary(json_path: Path, figure_path: Path, compute: bool = True) -> None:
     summary = load_json(json_path)
     if not isinstance(summary, dict) or not isinstance(summary.get("runs"), list):
+        if not compute:
+            raise FileNotFoundError(f"Missing ablation summary: {json_path}")
         summary = {
             "runs": [
                 {"ablation": "ebm_langevin", "mean_episode_return": 0.0},
@@ -182,8 +206,21 @@ def draw_ablation_summary(json_path: Path, figure_path: Path) -> None:
     save_figure(fig, figure_path)
 
 
-def write_manifest(output_dir: Path) -> None:
+def write_manifest(
+    output_dir: Path,
+    source_artifacts: list[Path] | None = None,
+    command: list[str] | None = None,
+    is_smoke: bool = False,
+) -> None:
+    """Write provenance metadata for generated paper figures."""
+
+    source_artifacts = source_artifacts or []
     manifest = {
+        "generated_at": datetime.now(UTC).replace(microsecond=0).isoformat(),
+        "git_commit": git_commit(),
+        "commands": [" ".join(command)] if command else [],
+        "source_artifacts": [str(path) for path in source_artifacts],
+        "is_smoke": bool(is_smoke),
         "figures": [
             "architecture_loop.png",
             "baseline_comparison.png",
@@ -196,6 +233,22 @@ def write_manifest(output_dir: Path) -> None:
     with (output_dir / "manifest.json").open("w", encoding="utf-8") as handle:
         json.dump(manifest, handle, indent=2, sort_keys=True)
         handle.write("\n")
+
+
+def git_commit() -> str | None:
+    """Return the short git commit when available."""
+
+    try:
+        completed = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    commit = completed.stdout.strip()
+    return commit or None
 
 
 def load_json(path: Path) -> Any | None:

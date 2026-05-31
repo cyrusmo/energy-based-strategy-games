@@ -84,7 +84,7 @@ include it as an explicit learned pursuer row:
 
 ```bash
 python examples/train_ppo_pursuer.py --config configs/demo/ppo_pursuer_smoke.yaml
-python examples/compare_pursuit_policies.py --include-learned-pursuer outputs/private/checkpoints/ppo_pursuer.pt
+python examples/compare_pursuit_policies.py --include-learned-pursuer <private-checkpoint-path>
 ```
 
 The learned row uses deterministic `argmax` inference, strict `pursuit_obs/v1`

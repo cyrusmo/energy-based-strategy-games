@@ -1,4 +1,4 @@
-from examples.calibrate_device import calibrate_devices
+from strategy_games.utils.calibration import calibrate_devices
 
 
 def test_calibration_cpu_smoke() -> None:

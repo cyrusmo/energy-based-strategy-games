@@ -1,4 +1,7 @@
-# Paper reproducibility lock for Python 3.11 CPU runs.
+# Paper reproducibility aid for Python 3.11 CPU runs.
+#
+# This file reflects the current development environment used for public
+# snapshot scripts. It is not a cross-platform guarantee.
 #
 # Regenerate after selecting the submission environment:
 #   python -m pip install -e ".[dev]"

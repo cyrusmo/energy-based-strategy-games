@@ -1,13 +1,17 @@
-from examples.pursuit_trace_viewer import _active_config_from_trace, _default_draft_config, _rollout_config_from_draft
 from strategy_games.rollouts import run_scripted_pursuit_rollout
+from strategy_games.viewers.pursuit_trace import (
+    active_config_from_trace,
+    default_draft_config,
+    rollout_config_from_draft,
+)
 
 
 def test_draft_config_conversion_does_not_mutate_draft() -> None:
-    draft = _default_draft_config()
+    draft = default_draft_config()
     draft["seed"] = 13
     draft["grid_size"] = [7, 8]
 
-    config = _rollout_config_from_draft(draft)
+    config = rollout_config_from_draft(draft)
 
     assert config.seed == 13
     assert config.env.grid_size == (7, 8)
@@ -15,8 +19,8 @@ def test_draft_config_conversion_does_not_mutate_draft() -> None:
 
 
 def test_active_config_from_trace_records_trace_metadata() -> None:
-    trace = run_scripted_pursuit_rollout(_rollout_config_from_draft(_default_draft_config()))
-    active = _active_config_from_trace(trace)
+    trace = run_scripted_pursuit_rollout(rollout_config_from_draft(default_draft_config()))
+    active = active_config_from_trace(trace)
 
     assert active["source"] == "loaded_trace"
     assert active["env_id"] == trace.env_id

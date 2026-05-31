@@ -59,7 +59,7 @@ python examples/run_benchmarks.py --config configs/benchmarks/debug_suite.yaml
 python examples/export_pursuit_trace.py --config configs/demo/custom_2_evader_9x9.yaml
 python examples/compare_pursuit_policies.py
 python examples/train_ppo_pursuer.py --config configs/demo/ppo_pursuer_smoke.yaml
-python examples/compare_pursuit_policies.py --include-learned-pursuer outputs/private/checkpoints/ppo_pursuer.pt
+python examples/compare_pursuit_policies.py --include-learned-pursuer <private-checkpoint-path>
 python examples/calibrate_device.py
 streamlit run examples/performance_dashboard.py
 ```
@@ -83,6 +83,24 @@ streamlit run examples/performance_dashboard.py
 ```
 
 The dashboard reads public artifacts under `outputs/public/` and is explicit when an artifact is missing. Device recommendations are empirical: on Apple Silicon, MPS can help batched tensor jobs but CPU may still be faster for tiny rollout-heavy workloads.
+
+## Reproducibility Commands
+
+Fast local validation:
+
+```bash
+./scripts/smoke_reproduce.sh
+```
+
+Full paper protocol:
+
+```bash
+scripts/reproduce_paper_results.sh
+```
+
+Generated outputs under `outputs/public/` are ignored by default. Curated artifacts can be promoted deliberately once the corresponding provenance manifest and public report text are current.
+
+`requirements-lock.txt` records the current development environment used for snapshot scripts. It is a reproducibility aid, not a cross-platform guarantee.
 
 ## Key Metrics
 

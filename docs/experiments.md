@@ -87,7 +87,7 @@ be included:
 
 ```bash
 python examples/train_ppo_pursuer.py --config configs/demo/ppo_pursuer_smoke.yaml
-python examples/compare_pursuit_policies.py --include-learned-pursuer outputs/private/checkpoints/ppo_pursuer.pt
+python examples/compare_pursuit_policies.py --include-learned-pursuer <private-checkpoint-path>
 ```
 
 Rows are pursuer policies and columns are evader policies. The primary payoff is
@@ -117,7 +117,7 @@ Public outputs:
 
 Private output:
 
-- `outputs/private/checkpoints/ppo_pursuer.pt`
+- local PPO checkpoint file, ignored by Git
 
 The public metrics expose `checkpoint_written`, deterministic `eval_seeds`,
 training scope, observation metadata, action-space metadata, training metrics,
@@ -141,6 +141,16 @@ Config-driven runs can write public artifacts under `outputs/public/`:
 - `pursuit_models/ppo_pursuer/metrics.json`: first trainable pursuit PPO smoke metrics
 
 Generated demo artifacts are ignored by default so curated results can be promoted deliberately.
+
+## Daily Reproducibility
+
+Use the smoke reproduction script for fast local validation:
+
+```bash
+./scripts/smoke_reproduce.sh
+```
+
+It runs tests, linting, baseline/payoff artifact refreshes, tiny ablations, a tiny multi-seed protocol, public/private leak scanning, and paper figure generation from public artifacts. The full paper protocol remains available through `scripts/reproduce_paper_results.sh` and is intentionally slower.
 
 ## Benchmarks
 
