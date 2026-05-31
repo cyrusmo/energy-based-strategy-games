@@ -23,13 +23,15 @@ class StrategyRecord:
     label: str | None = None
     average_case_value: float | None = None
     worst_case_value: float | None = None
+    goal_rate: float = 0.0
     timestamp: float = field(default_factory=time.time)
     metadata: dict[str, object] = field(default_factory=dict)
 
     def score(self) -> float:
         """Selection score used for positive sampling."""
 
-        return float(self.robustness_score - self.exploitability_proxy + self.episode_return)
+        average = self.average_case_value if self.average_case_value is not None else self.episode_return
+        return float(average + self.episode_return + self.goal_rate - 0.5 * self.exploitability_proxy + 0.5 * self.robustness_score)
 
 
 class StrategyBuffer:

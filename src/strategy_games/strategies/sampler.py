@@ -18,7 +18,7 @@ def langevin_sample(
     strategy_dim: int,
     steps: int = 30,
     step_size: float = 1e-2,
-    noise_scale: float = 1.0,
+    noise_scale: float = 0.25,
     init: Tensor | None = None,
     clamp: tuple[float, float] | None = (-5.0, 5.0),
     device: torch.device | str | None = None,

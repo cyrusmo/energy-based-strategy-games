@@ -21,13 +21,14 @@ class StrategyConditionedPolicy(nn.Module):
         self.state_dim = state_dim
         self.strategy_dim = strategy_dim
         self.action_dim = action_dim
-        self.net = nn.Sequential(
+        self.backbone = nn.Sequential(
             nn.Linear(state_dim + strategy_dim, hidden_dim),
             nn.Tanh(),
             nn.Linear(hidden_dim, hidden_dim),
             nn.Tanh(),
-            nn.Linear(hidden_dim, action_dim),
         )
+        self.actor = nn.Linear(hidden_dim, action_dim)
+        self.critic = nn.Linear(hidden_dim, 1)
 
     def forward(self, state: Tensor, strategy: Tensor) -> Tensor:
         """Return action logits for ``state`` and ``strategy`` batches."""
@@ -38,8 +39,30 @@ class StrategyConditionedPolicy(nn.Module):
             raise ValueError(f"strategy must have shape [batch, strategy_dim], got {tuple(strategy.shape)}")
         if state.shape[0] != strategy.shape[0]:
             raise ValueError("state and strategy batch sizes must match")
+        features = self._features(state, strategy)
+        return self.actor(features)
+
+    def value(self, state: Tensor, strategy: Tensor) -> Tensor:
+        """Return scalar value estimates for ``state`` and ``strategy`` batches."""
+
+        features = self._features(state, strategy)
+        return self.critic(features).squeeze(-1)
+
+    def evaluate(self, state: Tensor, strategy: Tensor) -> tuple[Tensor, Tensor]:
+        """Return action logits and value estimates for a batch."""
+
+        features = self._features(state, strategy)
+        return self.actor(features), self.critic(features).squeeze(-1)
+
+    def _features(self, state: Tensor, strategy: Tensor) -> Tensor:
+        if state.ndim != 2:
+            raise ValueError(f"state must have shape [batch, state_dim], got {tuple(state.shape)}")
+        if strategy.ndim != 2:
+            raise ValueError(f"strategy must have shape [batch, strategy_dim], got {tuple(strategy.shape)}")
+        if state.shape[0] != strategy.shape[0]:
+            raise ValueError("state and strategy batch sizes must match")
         x = torch.cat([state.float(), strategy.float()], dim=-1)
-        return self.net(x)
+        return self.backbone(x)
 
     @torch.no_grad()
     def act(self, state: Tensor, strategy: Tensor, deterministic: bool = False) -> int:

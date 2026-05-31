@@ -9,8 +9,9 @@ env:
   catch_radius: 0
 
 training:
-  iterations: 3
-  candidate_strategies: 7
+  iterations: 20
+  candidate_strategies: 10
+  episodes_per_update: 4
   strategy_dim: 8
 
 policy:
@@ -18,14 +19,28 @@ policy:
 
 ebm:
   hidden_dim: 64
-  langevin_steps: 8
+  langevin_steps: 20
   langevin_step_size: 0.02
+  langevin_noise_scale: 0.25
 
 world_model:
   hidden_dim: 64
 
 evaluator:
   episodes_per_opponent: 1
+  action_source: policy
+
+sampler:
+  type: langevin
+  max_heuristic_candidates: 3
+  noise_scale: 0.25
+
+selection:
+  robustness_aware: true
+  average_value_weight: 1.0
+  robustness_weight: 0.5
+  exploitability_weight: 0.5
+  goal_rate_weight: 1.0
 
 updates:
   policy_lr: 0.003
@@ -33,12 +48,24 @@ updates:
   world_model_lr: 0.001
   gamma: 0.99
   entropy_coef: 0.01
+  value_coef: 0.5
+  shaping_coef: 1.0
+  behavior_clone_iterations: 5
+  behavior_clone_coef: 0.25
   grad_clip_norm: 1.0
   ebm_batch_size: 8
   positive_quantile: 0.5
   train_policy: true
   train_ebm: true
   train_world_model: true
+
+convergence:
+  metric: goal_rate
+  target: 1.0
+  patience: 3
+  window: 3
+  min_iter: 5
+  early_stop: true
 
 logging:
   output_dir: outputs/public/day3_debug

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 import numpy as np
 import torch
@@ -54,7 +55,12 @@ class GameTheoreticEvaluator:
         self.strategy_dim = strategy_dim
         self.rng = np.random.default_rng(seed)
 
-    def evaluate_strategy(self, strategy: Tensor, label: str | None = None) -> dict[str, float | str]:
+    def evaluate_strategy(
+        self,
+        strategy: Tensor,
+        label: str | None = None,
+        policy: Any | None = None,
+    ) -> dict[str, float | str]:
         """Return approximate values and robustness metrics for one strategy."""
 
         if strategy.ndim != 1:
@@ -63,7 +69,7 @@ class GameTheoreticEvaluator:
         results: list[RolloutResult] = []
         for opponent_label in self.opponent_labels:
             for _ in range(self.episodes_per_opponent):
-                results.append(self.rollout(strategy, opponent_label, label=label))
+                results.append(self.rollout(strategy, opponent_label, label=label, policy=policy))
 
         values = np.asarray([result.total_reward for result in results], dtype=np.float32)
         average_value = float(values.mean())
@@ -90,7 +96,13 @@ class GameTheoreticEvaluator:
             "best_response_label": best_response_label,
         }
 
-    def rollout(self, strategy: Tensor, opponent_label: str, label: str | None = None) -> RolloutResult:
+    def rollout(
+        self,
+        strategy: Tensor,
+        opponent_label: str,
+        label: str | None = None,
+        policy: Any | None = None,
+    ) -> RolloutResult:
         """Run one true-environment rollout for a candidate strategy."""
 
         env = AttackerDefenderGridworld(self.env_config)
@@ -100,7 +112,10 @@ class GameTheoreticEvaluator:
         info: dict[str, object] = {"outcome": "running", "steps": 0}
 
         while not done:
-            attacker_action = attacker_heuristic_action(env, strategy, label=label)
+            if policy is None:
+                attacker_action = attacker_heuristic_action(env, strategy, label=label)
+            else:
+                attacker_action = policy_action(env, policy, strategy)
             defender_action = defender_heuristic_action(env, opponent_label)
             result = env.step(attacker_action, defender_action)
             total_reward += result.reward
@@ -115,6 +130,15 @@ class GameTheoreticEvaluator:
             steps=steps,
             opponent_label=opponent_label,
         )
+
+
+def policy_action(env: AttackerDefenderGridworld, policy: Any, strategy: Tensor) -> int:
+    """Return an action from a learned strategy-conditioned policy."""
+
+    device = next(policy.parameters()).device
+    state = torch.as_tensor(env.observe(), dtype=torch.float32, device=device)
+    strategy_device = strategy.detach().float().to(device)
+    return int(policy.act(state, strategy_device, deterministic=True))
 
 
 def attacker_heuristic_action(env: AttackerDefenderGridworld, strategy: Tensor, label: str | None = None) -> int:
