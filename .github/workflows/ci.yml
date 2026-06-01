@@ -22,7 +22,9 @@ jobs:
           python -m pip install -e ".[dev]"
 
       - name: Run tests
-        run: pytest
+        env:
+          PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/src
+        run: python -m pytest
 
       - name: Run ruff
         run: ruff check .
