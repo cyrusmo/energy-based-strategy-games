@@ -27,6 +27,7 @@ def test_smoke_script_has_required_commands_and_is_executable() -> None:
     assert "examples/compute_payoff_matrix.py --episodes-per-opponent 1" in content
     assert "examples/run_ablation_suite.py --seeds 0 --only gaussian_sampler no_world_model" in content
     assert "examples/run_multiseed_protocol.py --seeds 0 --episodes 2 --ppo-total-steps 128 --no-ppo" in content
+    assert "examples/run_learning_study.py --seeds 0 --strategy-iterations 2 --no-ppo" in content
     assert "scripts/make_paper_figures.py --no-compute" in content
     assert "Smoke reproduction completed successfully." in content
 
@@ -98,6 +99,8 @@ def test_paper_figure_manifest_records_provenance(tmp_path: Path) -> None:
     baseline_path = tmp_path / "baselines.json"
     payoff_path = tmp_path / "payoff.json"
     ablation_path = tmp_path / "ablation.json"
+    learning_path = tmp_path / "learning.json"
+    triage_path = tmp_path / "triage_table.csv"
     output_dir = tmp_path / "figures"
 
     baseline_path.write_text(
@@ -129,6 +132,14 @@ def test_paper_figure_manifest_records_provenance(tmp_path: Path) -> None:
         json.dumps({"runs": [{"ablation": "gaussian_sampler", "mean_episode_return": -0.5}]}),
         encoding="utf-8",
     )
+    learning_path.write_text(
+        json.dumps({"methods": [{"method": "strategy_loop", "episode_return_mean": -0.5, "goal_rate_mean": 0.0}]}),
+        encoding="utf-8",
+    )
+    triage_path.write_text(
+        "method,mean_return,success_rate,variance,main_failure_mode,diagnostic_confidence,next_action,completed_seed_count\n",
+        encoding="utf-8",
+    )
 
     subprocess.run(
         [
@@ -142,6 +153,10 @@ def test_paper_figure_manifest_records_provenance(tmp_path: Path) -> None:
             str(payoff_path),
             "--ablation-json",
             str(ablation_path),
+            "--learning-json",
+            str(learning_path),
+            "--learning-triage-csv",
+            str(triage_path),
             "--no-compute",
         ],
         check=True,
@@ -155,6 +170,8 @@ def test_paper_figure_manifest_records_provenance(tmp_path: Path) -> None:
     assert "git_commit" in manifest
     assert manifest["is_smoke"] is True
     assert str(baseline_path) in manifest["source_artifacts"]
+    assert str(learning_path) in manifest["source_artifacts"]
+    assert str(triage_path) in manifest["source_artifacts"]
     assert "python scripts/make_paper_figures.py" in manifest["commands"][0]
 
 

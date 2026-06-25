@@ -28,6 +28,7 @@ This repository is currently a research scaffold for early experiments in energy
 - Add held-out gridworld layouts
 - Add more pursuit trace fixtures and curated public demos
 - Run PPO-lite seed sweeps and diagnose failure modes
+- Run the gridworld learning-study protocol and report generated learning curves
 - Add benchmark reports for seed sweeps without overclaiming performance
 - Add simple payoff-matrix experiments
 

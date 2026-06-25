@@ -443,6 +443,7 @@ def evaluate_ppo_policy(
     env_config = env_config or GridworldConfig()
     returns: list[float] = []
     outcomes: list[str] = []
+    steps: list[int] = []
     device = next(policy.parameters()).device
     for _ in range(episodes):
         env = AttackerDefenderGridworld(env_config)
@@ -460,7 +461,8 @@ def evaluate_ppo_policy(
             info = result.info
         returns.append(total)
         outcomes.append(str(info["outcome"]))
-    return _summarize(returns, outcomes)
+        steps.append(int(info.get("steps", env.steps)))
+    return _summarize(returns, outcomes, steps)
 
 
 def ppo_config_from_mapping(raw: Mapping[str, Any]) -> PPOConfig:
@@ -533,14 +535,17 @@ def _gridworld_config_from_mapping(raw: Mapping[str, Any]) -> GridworldConfig:
     )
 
 
-def _summarize(returns: list[float], outcomes: list[str]) -> dict[str, float]:
-    return {
+def _summarize(returns: list[float], outcomes: list[str], steps: list[int] | None = None) -> dict[str, float]:
+    summary = {
         "episode_return": float(np.mean(returns)),
         "win_rate": float(outcomes.count("goal") / len(outcomes)),
         "goal_rate": float(outcomes.count("goal") / len(outcomes)),
         "catch_rate": float(outcomes.count("caught") / len(outcomes)),
         "timeout_rate": float(outcomes.count("timeout") / len(outcomes)),
     }
+    if steps is not None:
+        summary["episode_length"] = float(np.mean(steps))
+    return summary
 
 
 def _mean_dict(items: list[dict[str, float]], key: str) -> float:

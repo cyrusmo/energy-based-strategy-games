@@ -39,6 +39,12 @@ def main() -> None:
     parser.add_argument("--baseline-json", type=Path, default=Path("outputs/public/baselines/metrics.json"))
     parser.add_argument("--payoff-json", type=Path, default=Path("outputs/public/payoff_matrix/matrix.json"))
     parser.add_argument("--ablation-json", type=Path, default=Path("outputs/public/ablations/summary.json"))
+    parser.add_argument("--learning-json", type=Path, default=Path("outputs/public/learning_study/summary.json"))
+    parser.add_argument(
+        "--learning-triage-csv",
+        type=Path,
+        default=Path("outputs/public/learning_study/triage_table.csv"),
+    )
     parser.add_argument("--no-compute", action="store_true", help="Use existing JSON only; do not run experiments.")
     args = parser.parse_args()
 
@@ -48,9 +54,16 @@ def main() -> None:
     draw_payoff_heatmap(args.payoff_json, args.output_dir / "payoff_matrix.png", compute=not args.no_compute)
     draw_embedding_projection(args.output_dir / "strategy_embedding_projection.png")
     draw_ablation_summary(args.ablation_json, args.output_dir / "ablation_summary.png", compute=not args.no_compute)
+    draw_learning_study_summary(args.learning_json, args.output_dir / "learning_study_summary.png", compute=not args.no_compute)
     write_manifest(
         args.output_dir,
-        source_artifacts=[args.baseline_json, args.payoff_json, args.ablation_json],
+        source_artifacts=[
+            args.baseline_json,
+            args.payoff_json,
+            args.ablation_json,
+            args.learning_json,
+            args.learning_triage_csv,
+        ],
         command=["python", "scripts/make_paper_figures.py", *sys.argv[1:]],
         is_smoke=args.no_compute,
     )
@@ -206,6 +219,42 @@ def draw_ablation_summary(json_path: Path, figure_path: Path, compute: bool = Tr
     save_figure(fig, figure_path)
 
 
+def draw_learning_study_summary(json_path: Path, figure_path: Path, compute: bool = True) -> None:
+    """Draw return and goal-rate bars from learning-study summary artifacts."""
+
+    summary = load_json(json_path)
+    if not isinstance(summary, dict) or not isinstance(summary.get("methods"), list):
+        if not compute:
+            raise FileNotFoundError(f"Missing learning-study summary: {json_path}")
+        summary = {
+            "methods": [
+                {"method": "strategy_loop", "episode_return_mean": 0.0, "goal_rate_mean": 0.0},
+                {"method": "ppo_baseline", "episode_return_mean": 0.0, "goal_rate_mean": 0.0},
+            ],
+            "placeholder": True,
+        }
+    methods = list(summary["methods"])
+    names = [str(row["method"]) for row in methods]
+    returns = [float(row.get("episode_return_mean", 0.0)) for row in methods]
+    goal_rates = [float(row.get("goal_rate_mean", 0.0)) for row in methods]
+
+    fig, axes = plt.subplots(1, 2, figsize=(10, 4), sharex=True)
+    axes[0].bar(names, returns)
+    axes[0].axhline(0.0, color="black", linewidth=0.8)
+    axes[0].set_title("Mean return")
+    axes[1].bar(names, goal_rates)
+    axes[1].set_ylim(0.0, 1.05)
+    axes[1].set_title("Mean goal rate")
+    for axis in axes:
+        axis.tick_params(axis="x", labelrotation=25)
+        axis.set_ylabel("Metric value")
+    fig.suptitle("Gridworld learning-study diagnostics")
+    if summary.get("placeholder"):
+        axes[0].text(0.5, 0.9, "Placeholder until learning study is run", ha="center", transform=axes[0].transAxes)
+    fig.tight_layout()
+    save_figure(fig, figure_path)
+
+
 def write_manifest(
     output_dir: Path,
     source_artifacts: list[Path] | None = None,
@@ -227,8 +276,9 @@ def write_manifest(
             "payoff_matrix.png",
             "strategy_embedding_projection.png",
             "ablation_summary.png",
+            "learning_study_summary.png",
         ],
-        "note": "Regenerate after running examples/run_ablation_suite.py for final ablation values.",
+        "note": "Regenerate after running ablation and learning-study scripts for final diagnostic values.",
     }
     with (output_dir / "manifest.json").open("w", encoding="utf-8") as handle:
         json.dump(manifest, handle, indent=2, sort_keys=True)

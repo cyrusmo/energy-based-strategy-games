@@ -2,6 +2,10 @@
 
 Date: 2026-05-11
 
+Status: historical diagnostic snapshot. Numeric tables below are retained as
+dated generated-output placeholders, not as current metric claims. Refresh from
+`outputs/public/` artifacts before citing or promoting results.
+
 ## Summary
 
 This repository is an early-stage research scaffold for separating latent strategy

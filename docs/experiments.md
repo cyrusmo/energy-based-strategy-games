@@ -125,6 +125,39 @@ and fixed-seed evaluation metrics. They do not expose the private checkpoint
 path by default. This baseline is intended to prove the learning/evaluation path
 is live, not to claim robust pursuit performance.
 
+## Gridworld Learning Study
+
+The learning-study protocol is the next diagnostic layer for the primary
+gridworld. It compares the strategy loop and PPO-lite baseline over fixed seeds
+and writes:
+
+- `outputs/public/learning_study/runs.json`
+- `outputs/public/learning_study/summary.json`
+- `outputs/public/learning_study/learning_curves.csv`
+- `outputs/public/learning_study/triage_table.csv`
+
+Run the modest default study with:
+
+```bash
+python examples/run_learning_study.py --config configs/gridworld_learning_study.yaml
+```
+
+For a fast strategy-loop-only smoke run:
+
+```bash
+python examples/run_learning_study.py --seeds 0 --strategy-iterations 2 --no-ppo
+```
+
+This protocol is intended to diagnose whether the strategy loop is improving,
+still weak, or competitive with PPO/random/direct-goal baselines. It is not a
+claim of robust multi-agent reasoning.
+
+The triage table records the configured success metric, seed-level variance,
+completed seed count, a conservative failure-mode label, diagnostic confidence,
+and a recommended next action. If a method crashes for a seed, the failed row is
+kept in `runs.json` and excluded from aggregate metrics with an explicit
+completed seed count.
+
 ## Public Artifacts
 
 Config-driven runs can write public artifacts under `outputs/public/`:
@@ -139,6 +172,8 @@ Config-driven runs can write public artifacts under `outputs/public/`:
 - `policy_comparison.json`: pursuit scripted-policy empirical-game diagnostics
 - `policy_comparison.csv`: flat public summary table for pursuit policy pairs
 - `pursuit_models/ppo_pursuer/metrics.json`: first trainable pursuit PPO smoke metrics
+- `learning_study/summary.json`: gridworld strategy-loop/PPO learning diagnostics
+- `learning_study/triage_table.csv`: conservative failure-mode readout for the learning study
 
 Generated demo artifacts are ignored by default so curated results can be promoted deliberately.
 
@@ -150,7 +185,7 @@ Use the smoke reproduction script for fast local validation:
 ./scripts/smoke_reproduce.sh
 ```
 
-It runs tests, linting, baseline/payoff artifact refreshes, tiny ablations, a tiny multi-seed protocol, public/private leak scanning, and paper figure generation from public artifacts. The full paper protocol remains available through `scripts/reproduce_paper_results.sh` and is intentionally slower.
+It runs tests, linting, baseline/payoff artifact refreshes, tiny ablations, a tiny multi-seed protocol, a tiny learning-study run, public/private leak scanning, and paper figure generation from public artifacts. The full paper protocol remains available through `scripts/reproduce_paper_results.sh` and is intentionally slower.
 
 ## Benchmarks
 

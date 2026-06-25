@@ -6,10 +6,8 @@ They do not establish robust multi-agent reasoning or equilibrium convergence.
 
 \subsection{Gridworld Baselines}
 
-The May 15 public snapshot compares four baselines on the default 10 by 10 attacker-defender gridworld.
-The direct-to-goal heuristic reaches the goal in every evaluation episode, with win rate $1.000$ and mean episode return $0.910$.
-The PPO-lite baseline, random policy, and early Day-2 strategy loop all have win rate $0.000$ under the short diagnostic budget.
-Their mean returns are $-1.180$, $-1.208$, and $-1.220$, respectively.
+The public snapshot compares simple baselines on the default attacker-defender gridworld using generated artifacts under \texttt{outputs/public/}.
+Current metric values should be read from the generated baseline, multi-seed, and learning-study summaries rather than from hand-written table entries in this draft.
 
 This result is useful because it falsifies an easy overclaim: the current latent strategy loop is not yet a strong controller for the default gridworld.
 For a methods paper, the baseline table should be framed as evidence that the harness can detect trivial but important baselines, not as evidence that the energy-based method is already competitive.
@@ -25,6 +23,13 @@ The matrix is not an equilibrium computation, and the worst sampled response is 
 The paper-facing ablation suite compares Langevin EBM sampling against Gaussian latent sampling, buffer positives against random positives, robustness-aware selection against average-value selection, different candidate counts, different opponent sample counts, and world-model fitting on or off.
 The purpose of these ablations is to identify which parts of the decomposition change diagnostic metrics such as return, win rate, buffer diversity, robustness, and the exploitability proxy.
 The purpose is not to claim state-of-the-art performance.
+
+\subsection{Learning-Study Protocol}
+
+The learning-study protocol records per-seed strategy-loop summaries, PPO-lite summaries, and per-iteration learning curves.
+Its purpose is to determine whether the strategy loop is measurably improving under a fixed budget and whether it is competitive with simple baselines.
+The protocol also writes a triage table with a failure-mode label, diagnostic confidence, completed seed count, and recommended next action.
+Results from this protocol should be reported from generated artifacts rather than hand-written snapshots.
 
 \section{Limitations Draft}
 

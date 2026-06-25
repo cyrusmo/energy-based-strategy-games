@@ -56,6 +56,7 @@ python examples/visualize_rollout.py
 python examples/compare_baselines.py
 python examples/compute_payoff_matrix.py
 python examples/run_benchmarks.py --config configs/benchmarks/debug_suite.yaml
+python examples/run_learning_study.py --config configs/gridworld_learning_study.yaml
 python examples/export_pursuit_trace.py --config configs/demo/custom_2_evader_9x9.yaml
 python examples/compare_pursuit_policies.py
 python examples/train_ppo_pursuer.py --config configs/demo/ppo_pursuer_smoke.yaml
@@ -117,6 +118,8 @@ Generated outputs under `outputs/public/` are ignored by default. Curated artifa
 - **PursuitTrace:** versioned JSON artifact for multi-agent pursuit/evasion rollouts, including per-step actions, rewards, captures, active evaders, and summary metrics.
 - **pursuit empirical-game diagnostics:** rectangular scripted-policy matrix with pursuer policies as rows, evader policies as columns, `mean_pursuer_return` as the primary payoff, uniform-column empirical regret, maximin row policy, and a payoff-weighted row-policy ranking distribution. This is not an equilibrium solver.
 - **pursuit PPO baseline:** first trainable `pursuer_0` path for the multi-evader pursuit game. It saves public metrics/config metadata and an ignored private checkpoint, then can be included as an explicit learned row in pursuit comparison.
+- **learning-study triage:** gridworld seed-sweep diagnostic table with success rate, variance, completed seed count, failure-mode label, diagnostic confidence, and next action.
+- **learning-study summary:** multi-seed diagnostics for the strategy loop and PPO-lite gridworld baseline, including mean/std/CI for return and outcome rates plus per-iteration learning curves.
 
 ## Current Status
 
@@ -125,6 +128,7 @@ This is a research scaffold and early-stage experimental framework. It does not 
 ## Research Roadmap
 
 - Harden the PPO-lite baseline and compare it against the strategy loop across seed sweeps.
+- Use the learning-study protocol to diagnose whether the strategy loop is improving, still weak, or competitive with PPO/random/direct-goal baselines.
 - Add evader-side PPO only after the pursuer-side path is stable and comparable.
 - Improve EBM training with better negative sampling and replay schedules.
 - Use the learned world model for imaginary strategy evaluation.

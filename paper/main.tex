@@ -87,23 +87,9 @@ The paper-facing ablation suite covers EBM versus Gaussian sampling, buffer posi
 \section{Results}
 
 Results should be reported as diagnostics.
-The current public snapshot shows that the direct-to-goal heuristic wins the default gridworld while the early strategy loop and PPO-lite baseline do not.
-This is evidence that the harness can expose failure modes, not evidence of robust multi-agent reasoning.
-
-\begin{table}[h]
-\centering
-\caption{Current public baseline snapshot. Values come from the May 15 diagnostic run and should be replaced by multi-seed results before submission.}
-\begin{tabular}{lrr}
-\toprule
-Baseline & Win rate & Episode return \\
-\midrule
-Direct-goal heuristic & 1.000 & 0.910 \\
-PPO-lite baseline & 0.000 & -1.180 \\
-Day-2 strategy loop & 0.000 & -1.220 \\
-Random policy & 0.000 & -1.208 \\
-\bottomrule
-\end{tabular}
-\end{table}
+Current values should be inserted from generated artifacts under \texttt{outputs/public/}, especially the baseline, multi-seed, ablation, and learning-study summaries.
+Until those artifacts are promoted into a paper table, this section should be read as a placeholder for diagnostic results rather than a source of hand-written metric claims.
+The expected interpretation is that the harness can expose failure modes; it is not evidence of robust multi-agent reasoning.
 
 The fuller paper-facing results prose is maintained in \texttt{paper/results\_and\_limitations.tex} while the experiment suite is still evolving.
 

@@ -16,6 +16,7 @@ echo "Using Python interpreter: ${PYTHON}"
 "${PYTHON}" examples/compute_payoff_matrix.py --episodes-per-opponent 1 --output outputs/public/payoff_matrix/matrix.json
 "${PYTHON}" examples/run_ablation_suite.py --seeds 0 --only gaussian_sampler no_world_model
 "${PYTHON}" examples/run_multiseed_protocol.py --seeds 0 --episodes 2 --ppo-total-steps 128 --no-ppo
+"${PYTHON}" examples/run_learning_study.py --seeds 0 --strategy-iterations 2 --no-ppo
 "${PYTHON}" scripts/make_paper_figures.py --no-compute
 
 echo "Smoke reproduction completed successfully."
