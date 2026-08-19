@@ -7,10 +7,11 @@ They do not establish robust multi-agent reasoning or equilibrium convergence.
 \subsection{Gridworld Baselines}
 
 The public snapshot compares simple baselines on the default attacker-defender gridworld using generated artifacts under \texttt{outputs/public/}.
-Current metric values should be read from the generated baseline, multi-seed, and learning-study summaries rather than from hand-written table entries in this draft.
+Current metric values should be read from the generated baseline, multi-seed, learning-study, and held-out layout summaries rather than from hand-written table entries in this draft.
 
-This result is useful because it falsifies an easy overclaim: the current latent strategy loop is not yet a strong controller for the default gridworld.
-For a methods paper, the baseline table should be framed as evidence that the harness can detect trivial but important baselines, not as evidence that the energy-based method is already competitive.
+On the default layout, a shaped PPO baseline and a heuristic-aligned strategy loop can now match the direct-goal heuristic.
+Held-out layouts, especially \texttt{intercept\_path}, show that this match is not transfer: the same methods still fail when the greedy defender starts on the obvious path.
+For a methods paper, these tables should be framed as evidence that the harness can detect both trivial wins and heuristic overfitting, not as evidence that the energy-based method is already competitive.
 
 \subsection{Payoff and Strategy Diagnostics}
 
@@ -26,10 +27,11 @@ The purpose is not to claim state-of-the-art performance.
 
 \subsection{Learning-Study Protocol}
 
-The learning-study protocol records per-seed strategy-loop summaries, PPO-lite summaries, and per-iteration learning curves.
+The learning-study protocol records per-seed strategy-loop summaries, PPO summaries, and per-iteration learning curves.
 Its purpose is to determine whether the strategy loop is measurably improving under a fixed budget and whether it is competitive with simple baselines.
 The protocol also writes a triage table with a failure-mode label, diagnostic confidence, completed seed count, and recommended next action.
-Results from this protocol should be reported from generated artifacts rather than hand-written snapshots.
+Held-out layout comparisons should be reported alongside the learning study so default-map success is not mistaken for transfer.
+Results from these protocols should be reported from generated artifacts rather than hand-written snapshots.
 
 \section{Limitations Draft}
 

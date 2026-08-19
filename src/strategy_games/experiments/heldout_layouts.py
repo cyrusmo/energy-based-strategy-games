@@ -134,12 +134,22 @@ def summarize_heldout_rows(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
             }
         )
     direct = next((item for item in baselines if item["baseline"] == "direct_goal_heuristic"), None)
-    overfitting_visible = bool(direct is not None and direct["goal_rate_drop"] > 0.25)
+    failed_layouts = sorted(
+        {
+            str(row["layout"])
+            for row in rows
+            if str(row["baseline"]) == "direct_goal_heuristic"
+            and bool(row["held_out"])
+            and float(row["goal_rate"]) < 0.5
+        }
+    )
+    overfitting_visible = bool(direct is not None and direct["goal_rate_drop"] >= 0.25)
     return {
         "schema_version": "gridworld_heldout_layouts/v1",
         "train_layout": TRAIN_LAYOUT_NAME,
         "held_out_layouts": list(HELD_OUT_LAYOUT_NAMES),
         "baselines": baselines,
+        "direct_goal_failed_layouts": failed_layouts,
         "direct_goal_overfitting_visible": overfitting_visible,
         "notes": [
             "Held-out layouts change start, goal, or defender placement relative to the default map.",

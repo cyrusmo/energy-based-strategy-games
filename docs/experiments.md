@@ -186,7 +186,7 @@ Artifacts:
 - `outputs/public/heldout_layouts/summary.json`
 
 The summary flag `direct_goal_overfitting_visible` is true when the direct-goal
-heuristic's mean goal rate drops by more than 0.25 from the default layout to
+heuristic's mean goal rate drops by at least 0.25 from the default layout to
 the held-out set. This is a diagnostic, not a transfer claim.
 
 ## Public Artifacts

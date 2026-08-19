@@ -47,6 +47,7 @@ def test_heldout_summary_flags_direct_goal_overfitting() -> None:
     assert summary["schema_version"] == "gridworld_heldout_layouts/v1"
     assert summary["direct_goal_overfitting_visible"] is True
     assert summary["baselines"][0]["goal_rate_drop"] == 1.0
+    assert summary["direct_goal_failed_layouts"] == ["intercept_path"]
 
 
 def test_heldout_layout_study_smoke(tmp_path: Path) -> None:
