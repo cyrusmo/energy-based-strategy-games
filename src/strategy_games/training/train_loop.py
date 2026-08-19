@@ -9,7 +9,7 @@ from torch import Tensor
 from torch.distributions import Categorical
 from torch.nn import functional as F
 
-from strategy_games.envs.gridworld import AttackerDefenderGridworld, GridworldConfig, manhattan
+from strategy_games.envs.gridworld import AttackerDefenderGridworld, GridworldConfig, gridworld_potential
 from strategy_games.evaluation.best_response import GameTheoreticEvaluator, attacker_heuristic_action
 from strategy_games.experiments.convergence import detect_convergence
 from strategy_games.models.ebm import EnergyMLP, contrastive_divergence_loss
@@ -61,6 +61,7 @@ class TrainingConfig:
     train_ebm: bool = True
     train_world_model: bool = True
     evaluator_action_source: str = "heuristic"
+    executor_action_source: str = "aligned"
     behavior_clone_iterations: int = 0
     behavior_clone_coef: float = 0.0
     shaping_coef: float = 0.0
@@ -176,7 +177,13 @@ def run_training_loop(config: TrainingConfig | None = None) -> dict[str, object]
         evaluated.sort(key=lambda item: item[0], reverse=True)
         _, selected_strategy, selected_label, selected_metrics = evaluated[0]
         trajectories = [
-            collect_policy_rollout(env, policy, selected_strategy, config=config)
+            collect_policy_rollout(
+                env,
+                policy,
+                selected_strategy,
+                config=config,
+                selected_label=selected_label,
+            )
             for _ in range(config.episodes_per_update)
         ]
         rollout_summary = summarize_trajectories(trajectories)
@@ -219,6 +226,8 @@ def run_training_loop(config: TrainingConfig | None = None) -> dict[str, object]
                 "buffer_size": len(buffer),
                 "candidate_diversity": pairwise_diversity(candidates.detach().cpu()),
                 "updates": update_metrics,
+                "evaluator_action_source": config.evaluator_action_source,
+                "executor_action_source": resolved_executor_action_source(config),
             }
         )
         if config.early_stop_on_convergence:
@@ -289,10 +298,14 @@ def execute_policy_rollout(
     env: AttackerDefenderGridworld,
     policy: StrategyConditionedPolicy,
     strategy: torch.Tensor,
+    config: TrainingConfig | None = None,
+    selected_label: str | None = None,
 ) -> dict[str, float | str | int]:
     """Execute the current policy and return scalar rollout metrics."""
 
-    return collect_policy_rollout(env, policy, strategy).summary()
+    return collect_policy_rollout(
+        env, policy, strategy, config=config, selected_label=selected_label
+    ).summary()
 
 
 def selection_score_from_metrics(metrics: dict[str, float | str], config: TrainingConfig) -> float:
@@ -337,15 +350,32 @@ def summarize_trajectories(trajectories: list[Trajectory]) -> dict[str, float | 
     }
 
 
+def resolved_executor_action_source(config: TrainingConfig) -> str:
+    """Return the action source used at execution time.
+
+    ``aligned`` uses the evaluator's action source so scored candidates are
+    executed the same way they were ranked.
+    """
+
+    source = config.executor_action_source
+    if source == "aligned":
+        return config.evaluator_action_source
+    if source not in {"policy", "heuristic"}:
+        raise ValueError(f"Unknown executor_action_source: {source}")
+    return source
+
+
 def collect_policy_rollout(
     env: AttackerDefenderGridworld,
     policy: StrategyConditionedPolicy,
     strategy: Tensor,
     config: TrainingConfig | None = None,
+    selected_label: str | None = None,
 ) -> Trajectory:
     """Collect one strategy-conditioned rollout with differentiable log-probs."""
 
     config = config or TrainingConfig(env=env.config)
+    executor_source = resolved_executor_action_source(config)
     obs = env.reset()
     done = False
     trajectory = Trajectory()
@@ -355,8 +385,12 @@ def collect_policy_rollout(
         strategy_batch = strategy.detach().float().to(device).unsqueeze(0)
         logits = policy(state.unsqueeze(0), strategy_batch)
         distribution = Categorical(logits=logits)
-        action_tensor = distribution.sample()
-        action = int(action_tensor.item())
+        if executor_source == "heuristic":
+            action = attacker_heuristic_action(env, strategy, label=selected_label)
+            action_tensor = torch.tensor([action], dtype=torch.long, device=device)
+        else:
+            action_tensor = distribution.sample()
+            action = int(action_tensor.item())
 
         phi_before = gridworld_potential(env)
         result = env.step(action)
@@ -378,13 +412,6 @@ def collect_policy_rollout(
         trajectory.outcome = str(result.info["outcome"])
 
     return trajectory
-
-
-def gridworld_potential(env: AttackerDefenderGridworld) -> float:
-    """Potential for dense progress shaping; higher is closer to the goal."""
-
-    max_manhattan = max(1, 2 * (env.config.grid_size - 1))
-    return -float(manhattan(env.attacker_pos, env.goal_pos) / max_manhattan)
 
 
 def behavior_cloning_loss(

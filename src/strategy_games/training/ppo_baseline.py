@@ -19,7 +19,12 @@ from torch import Tensor, nn
 from torch.distributions import Categorical
 from torch.nn import functional as F
 
-from strategy_games.envs.gridworld import AttackerDefenderGridworld, GridworldConfig, greedy_action_towards
+from strategy_games.envs.gridworld import (
+    AttackerDefenderGridworld,
+    GridworldConfig,
+    greedy_action_towards,
+    gridworld_potential,
+)
 from strategy_games.models.policy import RandomPolicy
 from strategy_games.utils.config import load_config
 from strategy_games.utils.device import resolve_device
@@ -31,7 +36,7 @@ class PPOConfig:
     """Configuration for the custom-gridworld PPO-lite baseline."""
 
     seed: int = 11
-    total_steps: int = 512
+    total_steps: int = 4096
     rollout_steps: int = 128
     update_epochs: int = 4
     minibatch_size: int = 64
@@ -41,9 +46,12 @@ class PPOConfig:
     gae_lambda: float = 0.95
     clip_range: float = 0.2
     value_coef: float = 0.5
-    entropy_coef: float = 0.01
+    entropy_coef: float = 0.05
     grad_clip_norm: float = 0.5
-    eval_episodes: int = 5
+    reward_scale: float = 1.0
+    shaping_coef: float = 1.0
+    eval_episodes: int = 8
+    eval_every_updates: int = 2
     device: str = "auto"
     env: GridworldConfig = field(default_factory=GridworldConfig)
 
@@ -192,6 +200,7 @@ def train_ppo_baseline(config: PPOConfig | None = None) -> dict[str, Any]:
             observation=observation,
             steps=steps_this_batch,
             running_episode_return=running_episode_return,
+            config=config,
         )
         observation = batch.last_observation
         running_episode_return = batch.running_episode_return
@@ -210,30 +219,49 @@ def train_ppo_baseline(config: PPOConfig | None = None) -> dict[str, Any]:
         last_update = update_ppo_policy(policy, optimizer, batch, returns, advantages, config)
         steps_done += steps_this_batch
         updates += 1
-        update_history.append(
-            {
-                "update": int(updates),
-                "steps_done": int(steps_done),
-                "policy_loss": float(last_update["policy_loss"]),
-                "value_loss": float(last_update["value_loss"]),
-                "entropy": float(last_update["entropy"]),
-                "train_episode_return": float(np.mean(batch.episode_returns)) if batch.episode_returns else 0.0,
-            }
+        train_goal_rate = (
+            float(batch.episode_outcomes.count("goal") / len(batch.episode_outcomes)) if batch.episode_outcomes else 0.0
         )
+        history_row: dict[str, float | int] = {
+            "update": int(updates),
+            "steps_done": int(steps_done),
+            "policy_loss": float(last_update["policy_loss"]),
+            "value_loss": float(last_update["value_loss"]),
+            "entropy": float(last_update["entropy"]),
+            "train_episode_return": float(np.mean(batch.episode_returns)) if batch.episode_returns else 0.0,
+            "train_goal_rate": train_goal_rate,
+            "advantage_abs_mean": float(advantages.abs().mean().item()),
+            "reward_abs_mean": float(batch.rewards.abs().mean().item()),
+        }
+        if config.eval_every_updates > 0 and updates % config.eval_every_updates == 0:
+            eval_now = evaluate_ppo_policy(policy, config.env, episodes=config.eval_episodes)
+            history_row["eval_episode_return"] = float(eval_now["episode_return"])
+            history_row["eval_win_rate"] = float(eval_now["win_rate"])
+            history_row["eval_goal_rate"] = float(eval_now["goal_rate"])
+            history_row["eval_catch_rate"] = float(eval_now["catch_rate"])
+        update_history.append(history_row)
 
     eval_metrics = evaluate_ppo_policy(policy, config.env, episodes=config.eval_episodes)
-    return {
+    train_goal_rate = float(train_outcomes.count("goal") / len(train_outcomes)) if train_outcomes else 0.0
+    result = {
         **eval_metrics,
         "policy_loss": float(last_update["policy_loss"]),
         "value_loss": float(last_update["value_loss"]),
         "entropy": float(last_update["entropy"]),
         "episodes": int(config.eval_episodes),
         "train_episodes": int(len(train_returns)),
+        "train_goal_rate": train_goal_rate,
         "updates": int(updates),
         "total_steps": int(steps_done),
         "device": str(device),
         "update_history": update_history,
+        "shaping_coef": float(config.shaping_coef),
+        "reward_scale": float(config.reward_scale),
+        "entropy_coef": float(config.entropy_coef),
+        "learning_rate": float(config.learning_rate),
     }
+    result["diagnosis"] = diagnose_ppo_training(result, config)
+    return result
 
 
 def train_ppo_from_config(path: str | Path = "configs/gridworld_ppo_baseline.yaml") -> dict[str, Any]:
@@ -259,9 +287,11 @@ def collect_ppo_rollout(
     observation: np.ndarray,
     steps: int,
     running_episode_return: float = 0.0,
+    config: PPOConfig | None = None,
 ) -> PPORolloutBatch:
     """Collect one on-policy batch from the custom gridworld."""
 
+    config = config or PPOConfig()
     states: list[Tensor] = []
     actions: list[Tensor] = []
     old_log_probs: list[Tensor] = []
@@ -281,14 +311,18 @@ def collect_ppo_rollout(
             action = distribution.sample()
             log_prob = distribution.log_prob(action).squeeze(0)
 
+        phi_before = gridworld_potential(env)
         result = env.step(int(action.item()))
+        phi_after = gridworld_potential(env)
+        shaped_reward = float(result.reward) + config.shaping_coef * (config.gamma * phi_after - phi_before)
+        shaped_reward *= config.reward_scale
         running_episode_return += float(result.reward)
 
         states.append(state)
         actions.append(action.squeeze(0))
         old_log_probs.append(log_prob)
         values.append(value.squeeze(0))
-        rewards.append(float(result.reward))
+        rewards.append(float(shaped_reward))
         dones.append(bool(result.done))
 
         observation = result.observation
@@ -474,7 +508,7 @@ def ppo_config_from_mapping(raw: Mapping[str, Any]) -> PPOConfig:
     ppo_raw: Mapping[str, Any] = ppo_value if isinstance(ppo_value, Mapping) else {}
     return PPOConfig(
         seed=int(raw.get("seed", 11)),
-        total_steps=int(ppo_raw.get("total_steps", 512)),
+        total_steps=int(ppo_raw.get("total_steps", 4096)),
         rollout_steps=int(ppo_raw.get("rollout_steps", 128)),
         update_epochs=int(ppo_raw.get("update_epochs", 4)),
         minibatch_size=int(ppo_raw.get("minibatch_size", 64)),
@@ -484,12 +518,67 @@ def ppo_config_from_mapping(raw: Mapping[str, Any]) -> PPOConfig:
         gae_lambda=float(ppo_raw.get("gae_lambda", 0.95)),
         clip_range=float(ppo_raw.get("clip_range", 0.2)),
         value_coef=float(ppo_raw.get("value_coef", 0.5)),
-        entropy_coef=float(ppo_raw.get("entropy_coef", 0.01)),
+        entropy_coef=float(ppo_raw.get("entropy_coef", 0.05)),
         grad_clip_norm=float(ppo_raw.get("grad_clip_norm", 0.5)),
-        eval_episodes=int(ppo_raw.get("eval_episodes", 5)),
+        reward_scale=float(ppo_raw.get("reward_scale", 1.0)),
+        shaping_coef=float(ppo_raw.get("shaping_coef", 1.0)),
+        eval_episodes=int(ppo_raw.get("eval_episodes", 8)),
+        eval_every_updates=int(ppo_raw.get("eval_every_updates", 2)),
         device=str(raw.get("device", ppo_raw.get("device", "auto"))),
         env=_gridworld_config_from_mapping(env_raw),
     )
+
+
+def diagnose_ppo_training(result: Mapping[str, Any], config: PPOConfig) -> dict[str, Any]:
+    """Inspect PPO reward scale, entropy, value fit, and goal-reaching."""
+
+    entropy = float(result.get("entropy", 0.0))
+    value_loss = float(result.get("value_loss", 0.0))
+    win_rate = float(result.get("win_rate", 0.0))
+    goal_rate = float(result.get("goal_rate", 0.0))
+    issues: list[str] = []
+    if goal_rate <= 0.0 and win_rate <= 0.0:
+        issues.append("no_goal_reaching")
+    if entropy < 0.05:
+        issues.append("entropy_collapse")
+    elif entropy > 1.55:
+        issues.append("high_entropy_undirected")
+    if value_loss > 2.0:
+        issues.append("value_loss_high")
+    if abs(float(config.reward_scale) - 1.0) > 1e-8 and "no_goal_reaching" in issues:
+        issues.append("reward_scale_unresolved")
+
+    if goal_rate >= 0.5:
+        failure_mode = "learning_path_live"
+        next_action = "Increase seed count and compare against stronger baselines before making claims."
+        confidence = "high" if int(result.get("total_steps", 0)) >= 2048 else "medium"
+    elif goal_rate > 0.0:
+        failure_mode = "partial_goal_reaching"
+        next_action = "Increase PPO budget and keep potential shaping while inspecting held-out layouts."
+        confidence = "medium"
+    elif "entropy_collapse" in issues:
+        failure_mode = "ppo_policy_collapse"
+        next_action = "Raise entropy_coef and inspect advantage normalization before adding architecture."
+        confidence = "medium"
+    else:
+        failure_mode = "ppo_learning_weak"
+        next_action = "Inspect PPO reward scale, advantage normalization, learning rate, entropy, and value loss."
+        confidence = "medium"
+
+    return {
+        "issues": issues,
+        "failure_mode": failure_mode,
+        "diagnostic_confidence": confidence,
+        "next_action": next_action,
+        "entropy": entropy,
+        "value_loss": value_loss,
+        "goal_rate": goal_rate,
+        "shaping_coef": float(config.shaping_coef),
+        "reward_scale": float(config.reward_scale),
+        "entropy_coef": float(config.entropy_coef),
+        "learning_rate": float(config.learning_rate),
+        "total_steps": int(config.total_steps),
+    }
 
 
 def save_ppo_metrics(metrics: Mapping[str, Any], path: str | Path) -> Path:
@@ -518,6 +607,12 @@ def _validate_ppo_config(config: PPOConfig) -> None:
         raise ValueError("gae_lambda must be in [0, 1]")
     if config.eval_episodes < 1:
         raise ValueError("eval_episodes must be positive")
+    if config.eval_every_updates < 0:
+        raise ValueError("eval_every_updates must be non-negative")
+    if config.reward_scale <= 0.0:
+        raise ValueError("reward_scale must be positive")
+    if config.shaping_coef < 0.0:
+        raise ValueError("shaping_coef must be non-negative")
 
 
 def _gridworld_config_from_mapping(raw: Mapping[str, Any]) -> GridworldConfig:

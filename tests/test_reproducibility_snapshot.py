@@ -28,6 +28,7 @@ def test_smoke_script_has_required_commands_and_is_executable() -> None:
     assert "examples/run_ablation_suite.py --seeds 0 --only gaussian_sampler no_world_model" in content
     assert "examples/run_multiseed_protocol.py --seeds 0 --episodes 2 --ppo-total-steps 128 --no-ppo" in content
     assert "examples/run_learning_study.py --seeds 0 --strategy-iterations 2 --no-ppo" in content
+    assert "examples/run_heldout_layouts.py --episodes 1 --strategy-iterations 1 --no-ppo" in content
     assert "scripts/make_paper_figures.py --no-compute" in content
     assert "Smoke reproduction completed successfully." in content
 

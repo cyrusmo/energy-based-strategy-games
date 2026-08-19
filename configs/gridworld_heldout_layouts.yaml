@@ -1,0 +1,16 @@
+study:
+  layouts:
+    - default
+    - open_right
+    - intercept_path
+    - goal_near_defender
+    - cramped
+  episodes: 8
+  seed: 0
+  strategy_config: configs/gridworld_day3.yaml
+  ppo_config: configs/gridworld_ppo_baseline.yaml
+  output_dir: outputs/public/heldout_layouts
+  include_strategy_loop: true
+  include_ppo: false
+  strategy_iterations: 4
+  ppo_total_steps: 256

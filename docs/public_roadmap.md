@@ -11,6 +11,7 @@ This repository is currently a research scaffold for early experiments in energy
 - Approximate sampled-response evaluator
 - Strategy buffer
 - Debug training loop with lightweight policy, EBM, and world-model updates
+- Heuristic-aligned strategy execution (evaluator and executor share an action source)
 - Public experiment logging
 - Rollout trace and path visualization
 - Baseline comparison harness
@@ -18,17 +19,17 @@ This repository is currently a research scaffold for early experiments in energy
 - Benchmark registry and runner for custom gridworld seed sweeps
 - Validated pursuit/evasion trace schema and custom multi-evader rollout viewer
 - Optional PettingZoo Pursuit adapter for transfer benchmarking
+- PPO baseline with potential-based shaping, longer default budget, and training diagnosis
+- Gridworld learning-study protocol with multi-seed curves and triage
+- Held-out grid layouts that expose direct-goal overfitting
 - Unit and smoke tests
 
 ## Near Term
 
-- Harden the PPO-lite baseline into a stronger tested PPO comparison
-- Improve EBM training from buffer positives and sampler negatives
+- Interpret learning-study and held-out artifacts before expanding the method stack
+- Improve EBM training from buffer positives and sampler negatives if selected-strategy diversity collapses
 - Add richer rollout logging and visualization summaries
-- Add held-out gridworld layouts
 - Add more pursuit trace fixtures and curated public demos
-- Run PPO-lite seed sweeps and diagnose failure modes
-- Run the gridworld learning-study protocol and report generated learning curves
 - Add benchmark reports for seed sweeps without overclaiming performance
 - Add simple payoff-matrix experiments
 
@@ -36,9 +37,10 @@ This repository is currently a research scaffold for early experiments in energy
 
 - Improve approximate best-response search
 - Add learned world-model rollouts
-- Add zero-shot transfer benchmarks
+- Add zero-shot transfer benchmarks beyond layout swaps
 - Add PSRO-style population comparisons
 - Add more interpretable strategy embedding visualizations
+- Compare strategy-conditioned PPO against unconditioned PPO
 
 ## Long Term
 
@@ -46,4 +48,4 @@ This repository is currently a research scaffold for early experiments in energy
 - Study how energy-based latent strategy spaces interact with equilibrium-seeking evaluation
 - Compare model-free, model-based, and hybrid strategy evaluation pipelines
 
-This roadmap is intentionally conservative. Results should be reported only after reproducible experiments are implemented and reviewed.
+This roadmap is intentionally conservative. Results should be reported only after reproducible experiments are implemented and reviewed. Medium-term items stay deferred until a learning method beats or clearly challenges direct-goal on held-out layouts.

@@ -9,7 +9,7 @@ env:
   catch_radius: 0
 
 ppo:
-  total_steps: 512
+  total_steps: 4096
   rollout_steps: 128
   update_epochs: 4
   minibatch_size: 64
@@ -19,9 +19,12 @@ ppo:
   gae_lambda: 0.95
   clip_range: 0.2
   value_coef: 0.5
-  entropy_coef: 0.01
+  entropy_coef: 0.05
   grad_clip_norm: 0.5
-  eval_episodes: 5
+  reward_scale: 1.0
+  shaping_coef: 1.0
+  eval_episodes: 8
+  eval_every_updates: 2
 
 logging:
   output_dir: outputs/public/ppo_baseline

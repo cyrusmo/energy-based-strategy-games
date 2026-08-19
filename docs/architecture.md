@@ -23,7 +23,7 @@ Current implementation:
 
 ## Strategy-Conditioned Policy
 
-The policy receives an encoded environment state and a latent strategy embedding, then outputs action logits. The Day 2 loop applies a minimal REINFORCE-style update from collected rollout log-probabilities. This is useful for proving the training path is live, but it is not a replacement for a careful PPO implementation.
+The policy receives an encoded environment state and a latent strategy embedding, then outputs action logits. The Day 2 loop applies a minimal REINFORCE-style update from collected rollout log-probabilities. Named heuristic candidates are evaluated and, by default, executed with the same heuristic action map (`executor_action_source: aligned`) so selection scores match what the executor can do. The learned policy is still updated with behavior cloning and shaped returns so it can take over later.
 
 Current implementation:
 

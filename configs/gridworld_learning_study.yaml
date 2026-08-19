@@ -4,7 +4,7 @@ study:
   ppo_config: configs/gridworld_ppo_baseline.yaml
   output_dir: outputs/public/learning_study
   include_ppo: true
-  ppo_total_steps: 1024
+  ppo_total_steps: 4096
   strategy_iterations: 20
   task_success_metric: goal_rate
   high_variance_threshold: 0.25

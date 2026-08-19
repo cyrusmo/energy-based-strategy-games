@@ -14,6 +14,7 @@ from strategy_games.training.train_loop import (
     collect_policy_rollout,
     gridworld_potential,
     heuristic_action_from_state,
+    resolved_executor_action_source,
     selection_score_from_metrics,
     run_training_loop,
 )
@@ -163,6 +164,27 @@ def test_langevin_samples_lower_energy_than_random_for_quadratic_energy() -> Non
         noise_scale=0.0,
     )
     assert samples.square().sum(dim=-1).mean() < init.square().sum(dim=-1).mean()
+
+
+def test_heuristic_executor_reaches_goal_for_direct_goal_strategy() -> None:
+    env_config = GridworldConfig(grid_size=5, max_steps=8, defender_start=(4, 4), goal_pos=(4, 0))
+    policy = StrategyConditionedPolicy(state_dim=9, strategy_dim=4, action_dim=5, hidden_dim=8)
+    strategy = named_strategy_embedding("direct_goal", 4).vector
+    trajectory = collect_policy_rollout(
+        AttackerDefenderGridworld(env_config),
+        policy,
+        strategy,
+        config=TrainingConfig(env=env_config, executor_action_source="heuristic"),
+        selected_label="direct_goal",
+    )
+    assert trajectory.outcome == "goal"
+
+
+def test_aligned_executor_follows_evaluator_action_source() -> None:
+    heuristic_config = TrainingConfig(evaluator_action_source="heuristic", executor_action_source="aligned")
+    policy_config = TrainingConfig(evaluator_action_source="policy", executor_action_source="aligned")
+    assert resolved_executor_action_source(heuristic_config) == "heuristic"
+    assert resolved_executor_action_source(policy_config) == "policy"
 
 
 def test_behavior_clone_target_from_state_matches_direct_goal() -> None:

@@ -247,6 +247,13 @@ def manhattan(a: Position, b: Position) -> int:
     return abs(a[0] - b[0]) + abs(a[1] - b[1])
 
 
+def gridworld_potential(env: AttackerDefenderGridworld) -> float:
+    """Potential for dense progress shaping; higher is closer to the goal."""
+
+    max_manhattan = max(1, 2 * (env.config.grid_size - 1))
+    return -float(manhattan(env.attacker_pos, env.goal_pos) / max_manhattan)
+
+
 def greedy_action_towards(source: Position, target: Position) -> Action:
     """Return an action that greedily reduces Manhattan distance to ``target``."""
 

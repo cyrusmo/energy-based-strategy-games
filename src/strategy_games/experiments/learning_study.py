@@ -91,7 +91,7 @@ class LearningStudyConfig:
     ppo_config_path: Path = Path("configs/gridworld_ppo_baseline.yaml")
     output_dir: Path = Path("outputs/public/learning_study")
     include_ppo: bool = True
-    ppo_total_steps: int = 1024
+    ppo_total_steps: int = 4096
     strategy_iterations: int | None = None
     task_success_metric: str = "goal_rate"
     high_variance_threshold: float = 0.25
@@ -179,7 +179,7 @@ def learning_study_config_from_mapping(raw: Mapping[str, Any]) -> LearningStudyC
         ppo_config_path=Path(str(study_raw.get("ppo_config", "configs/gridworld_ppo_baseline.yaml"))),
         output_dir=Path(str(study_raw.get("output_dir", "outputs/public/learning_study"))),
         include_ppo=bool(study_raw.get("include_ppo", True)),
-        ppo_total_steps=int(study_raw.get("ppo_total_steps", 1024)),
+        ppo_total_steps=int(study_raw.get("ppo_total_steps", 4096)),
         strategy_iterations=(
             int(study_raw["strategy_iterations"]) if study_raw.get("strategy_iterations") is not None else None
         ),
@@ -289,6 +289,7 @@ def ppo_run_row(seed: int, result: Mapping[str, Any]) -> dict[str, Any]:
         "strategy_diversity": 0.0,
         "robustness_score": 0.0,
         "exploitability_proxy": 0.0,
+        "diagnosis_failure_mode": str(result.get("diagnosis", {}).get("failure_mode", "") if isinstance(result.get("diagnosis"), Mapping) else ""),
     }
 
 
@@ -374,10 +375,10 @@ def ppo_curve_rows(seed: int, result: Mapping[str, Any]) -> list[dict[str, Any]]
                 "seed": int(seed),
                 "iteration": int(item.get("update", len(rows))),
                 "step": int(item.get("steps_done", 0)),
-                "episode_return": float(item.get("train_episode_return", 0.0)),
-                "win_rate": "",
-                "goal_rate": "",
-                "catch_rate": "",
+                "episode_return": float(item.get("eval_episode_return", item.get("train_episode_return", 0.0))),
+                "win_rate": item.get("eval_win_rate", ""),
+                "goal_rate": item.get("eval_goal_rate", ""),
+                "catch_rate": item.get("eval_catch_rate", ""),
                 "timeout_rate": "",
                 "selected_label": "ppo_policy",
                 "average_case_value": "",

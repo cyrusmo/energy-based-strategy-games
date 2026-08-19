@@ -8,6 +8,7 @@ from strategy_games.envs.gridworld import GridworldConfig
 from strategy_games.training.ppo_baseline import (
     ActorCriticPolicy,
     PPOConfig,
+    diagnose_ppo_training,
     generalized_advantage_estimate,
     ppo_loss,
     train_ppo_baseline,
@@ -69,11 +70,49 @@ def test_tiny_ppo_training_smoke() -> None:
         "episodes",
         "updates",
         "update_history",
+        "diagnosis",
     ):
         assert key in result
     assert result["episodes"] == 1
     assert result["updates"] >= 1
     assert len(result["update_history"]) == result["updates"]
+    assert "failure_mode" in result["diagnosis"]
+
+
+def test_shaped_ppo_can_reach_nearby_goal() -> None:
+    result = train_ppo_baseline(
+        PPOConfig(
+            seed=0,
+            total_steps=256,
+            rollout_steps=64,
+            update_epochs=4,
+            minibatch_size=32,
+            hidden_dim=32,
+            entropy_coef=0.05,
+            shaping_coef=1.0,
+            reward_scale=1.0,
+            eval_episodes=4,
+            eval_every_updates=0,
+            env=GridworldConfig(
+                grid_size=5,
+                max_steps=8,
+                attacker_start=(0, 0),
+                defender_start=(4, 4),
+                goal_pos=(0, 2),
+            ),
+        )
+    )
+    assert result["goal_rate"] > 0.0
+    assert result["diagnosis"]["failure_mode"] in {"learning_path_live", "partial_goal_reaching"}
+
+
+def test_ppo_diagnosis_flags_missing_goal_reaching() -> None:
+    diagnosis = diagnose_ppo_training(
+        {"entropy": 1.2, "value_loss": 0.1, "win_rate": 0.0, "goal_rate": 0.0, "total_steps": 128},
+        PPOConfig(total_steps=128, eval_episodes=1),
+    )
+    assert diagnosis["failure_mode"] == "ppo_learning_weak"
+    assert "no_goal_reaching" in diagnosis["issues"]
 
 
 def test_ppo_config_runner_writes_metrics(tmp_path) -> None:
@@ -120,5 +159,6 @@ def _tiny_ppo_config() -> PPOConfig:
         minibatch_size=4,
         hidden_dim=8,
         eval_episodes=1,
+        eval_every_updates=0,
         env=GridworldConfig(grid_size=5, max_steps=8, defender_start=(4, 4), goal_pos=(4, 0)),
     )

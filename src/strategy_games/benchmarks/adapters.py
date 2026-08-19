@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import time
 from collections.abc import Mapping
+from dataclasses import replace
 from typing import Any, Protocol
 
 import numpy as np
@@ -252,53 +253,7 @@ def _training_config(raw: Mapping[str, Any], env_config: GridworldConfig) -> Tra
 
 
 def _replace_training_seed(config: TrainingConfig, seed: int) -> TrainingConfig:
-    return TrainingConfig(
-        seed=seed,
-        iterations=config.iterations,
-        candidate_strategies=config.candidate_strategies,
-        strategy_dim=config.strategy_dim,
-        policy_hidden_dim=config.policy_hidden_dim,
-        ebm_hidden_dim=config.ebm_hidden_dim,
-        world_model_hidden_dim=config.world_model_hidden_dim,
-        langevin_steps=config.langevin_steps,
-        langevin_step_size=config.langevin_step_size,
-        episodes_per_opponent=config.episodes_per_opponent,
-        episodes_per_update=config.episodes_per_update,
-        policy_lr=config.policy_lr,
-        ebm_lr=config.ebm_lr,
-        world_model_lr=config.world_model_lr,
-        gamma=config.gamma,
-        entropy_coef=config.entropy_coef,
-        value_coef=config.value_coef,
-        grad_clip_norm=config.grad_clip_norm,
-        ebm_batch_size=config.ebm_batch_size,
-        positive_quantile=config.positive_quantile,
-        sampler_type=config.sampler_type,
-        gaussian_scale=config.gaussian_scale,
-        langevin_noise_scale=config.langevin_noise_scale,
-        max_heuristic_candidates=config.max_heuristic_candidates,
-        robustness_aware_selection=config.robustness_aware_selection,
-        average_value_weight=config.average_value_weight,
-        robustness_weight=config.robustness_weight,
-        exploitability_weight=config.exploitability_weight,
-        goal_rate_weight=config.goal_rate_weight,
-        use_buffer_positives=config.use_buffer_positives,
-        train_policy=config.train_policy,
-        train_ebm=config.train_ebm,
-        train_world_model=config.train_world_model,
-        evaluator_action_source=config.evaluator_action_source,
-        behavior_clone_iterations=config.behavior_clone_iterations,
-        behavior_clone_coef=config.behavior_clone_coef,
-        shaping_coef=config.shaping_coef,
-        convergence_metric=config.convergence_metric,
-        convergence_target=config.convergence_target,
-        convergence_patience=config.convergence_patience,
-        convergence_window=config.convergence_window,
-        convergence_min_iter=config.convergence_min_iter,
-        early_stop_on_convergence=config.early_stop_on_convergence,
-        device=config.device,
-        env=config.env,
-    )
+    return replace(config, seed=seed)
 
 
 def _safe_int(value: object, default: int = 0) -> int:

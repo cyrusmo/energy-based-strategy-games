@@ -44,8 +44,9 @@ Reported strategy diversity can be low, and early public snapshots include cases
 The world model is fit to one-step transitions but is not yet used for imagined rollouts or model-based strategy evaluation.
 Therefore, any claim about model-based reasoning should be deferred until the rollout interface is implemented and evaluated.
 
-The PPO baselines are intentionally lightweight.
-They are useful as live learning baselines and sanity checks, but stronger PPO budgets and multi-seed learning curves are needed before comparing learning efficiency.
+The PPO baselines now include potential-based goal shaping, a longer default budget, and a public training diagnosis over entropy, value loss, and goal-reaching.
+They remain lightweight comparison baselines rather than tuned SOTA agents.
+Stronger multi-seed curves and held-out layout comparisons should be cited from generated artifacts before claiming learning efficiency.
 
 The multi-evader pursuit infrastructure is valuable for trace inspection and empirical-game diagnostics, but it is currently a supplementary track.
 It should not be presented as a second EBM-driven domain unless latent strategy generation and sampled-response selection are explicitly integrated into that environment.

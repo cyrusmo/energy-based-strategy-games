@@ -28,11 +28,14 @@ world_model:
 
 evaluator:
   episodes_per_opponent: 1
-  action_source: policy
+  action_source: heuristic
+
+executor:
+  action_source: aligned
 
 sampler:
   type: langevin
-  max_heuristic_candidates: 3
+  max_heuristic_candidates: 5
   noise_scale: 0.25
 
 selection:
@@ -47,11 +50,11 @@ updates:
   ebm_lr: 0.001
   world_model_lr: 0.001
   gamma: 0.99
-  entropy_coef: 0.01
+  entropy_coef: 0.05
   value_coef: 0.5
   shaping_coef: 1.0
-  behavior_clone_iterations: 5
-  behavior_clone_coef: 0.25
+  behavior_clone_iterations: 8
+  behavior_clone_coef: 0.5
   grad_clip_norm: 1.0
   ebm_batch_size: 8
   positive_quantile: 0.5

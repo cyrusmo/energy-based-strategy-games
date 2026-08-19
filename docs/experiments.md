@@ -26,10 +26,10 @@ Initial baselines:
 - PPO-lite actor-critic attacker baseline
 - PPO-lite `pursuer_0` baseline for multi-evader pursuit, trained against scripted evaders
 - Lightweight strategy-conditioned policy-gradient update
+- Held-out layout comparison (random, direct-goal, strategy loop)
 
 Planned baselines:
 
-- Hardened PPO without strategy conditioning
 - Strategy-conditioned PPO with random latent strategies
 - PSRO-style population baseline
 - Heuristic defender/opponent populations with held-out responses
@@ -52,7 +52,6 @@ Core metrics:
 
 Planned metrics:
 
-- Zero-shot transfer across maps and goals
 - Performance against held-out opponent policies
 - Payoff matrix coverage
 - Embedding clustering quality
@@ -158,6 +157,38 @@ and a recommended next action. If a method crashes for a seed, the failed row is
 kept in `runs.json` and excluded from aggregate metrics with an explicit
 completed seed count.
 
+## Held-Out Layouts
+
+Direct-to-goal is a strong sanity-check heuristic on the default map because the
+greedy defender's axis-aligned chase misses the attacker's column. Held-out
+layouts change that geometry:
+
+- `open_right`: goal on the top row
+- `intercept_path`: defender starts on the direct-goal path
+- `goal_near_defender`: goal adjacent to the defender start
+- `cramped`: smaller grid with a nearby defender
+
+Run:
+
+```bash
+python examples/run_heldout_layouts.py --config configs/gridworld_heldout_layouts.yaml
+```
+
+Fast smoke:
+
+```bash
+python examples/run_heldout_layouts.py --episodes 1 --strategy-iterations 1 --no-ppo
+```
+
+Artifacts:
+
+- `outputs/public/heldout_layouts/rows.csv`
+- `outputs/public/heldout_layouts/summary.json`
+
+The summary flag `direct_goal_overfitting_visible` is true when the direct-goal
+heuristic's mean goal rate drops by more than 0.25 from the default layout to
+the held-out set. This is a diagnostic, not a transfer claim.
+
 ## Public Artifacts
 
 Config-driven runs can write public artifacts under `outputs/public/`:
@@ -174,6 +205,7 @@ Config-driven runs can write public artifacts under `outputs/public/`:
 - `pursuit_models/ppo_pursuer/metrics.json`: first trainable pursuit PPO smoke metrics
 - `learning_study/summary.json`: gridworld strategy-loop/PPO learning diagnostics
 - `learning_study/triage_table.csv`: conservative failure-mode readout for the learning study
+- `heldout_layouts/summary.json`: default vs held-out layout baseline comparison
 
 Generated demo artifacts are ignored by default so curated results can be promoted deliberately.
 
@@ -185,7 +217,7 @@ Use the smoke reproduction script for fast local validation:
 ./scripts/smoke_reproduce.sh
 ```
 
-It runs tests, linting, baseline/payoff artifact refreshes, tiny ablations, a tiny multi-seed protocol, a tiny learning-study run, public/private leak scanning, and paper figure generation from public artifacts. The full paper protocol remains available through `scripts/reproduce_paper_results.sh` and is intentionally slower.
+It runs tests, linting, baseline/payoff artifact refreshes, tiny ablations, a tiny multi-seed protocol, a tiny learning-study run, a tiny held-out layout run, public/private leak scanning, and paper figure generation from public artifacts. The full paper protocol remains available through `scripts/reproduce_paper_results.sh` and is intentionally slower.
 
 ## Benchmarks
 

@@ -26,6 +26,7 @@ def run_from_config(path: str | Path) -> dict[str, object]:
     training_raw = raw.get("training", {})
     ebm_raw = raw.get("ebm", {})
     evaluator_raw = raw.get("evaluator", {})
+    executor_raw = raw.get("executor", {})
     policy_raw = raw.get("policy", {})
     world_model_raw = raw.get("world_model", {})
     sampler_raw = raw.get("sampler", {})
@@ -67,6 +68,7 @@ def run_from_config(path: str | Path) -> dict[str, object]:
         train_ebm=bool(updates_raw.get("train_ebm", True)),
         train_world_model=bool(updates_raw.get("train_world_model", True)),
         evaluator_action_source=str(evaluator_raw.get("action_source", "heuristic")),
+        executor_action_source=str(executor_raw.get("action_source", "aligned")),
         behavior_clone_iterations=int(updates_raw.get("behavior_clone_iterations", 0)),
         behavior_clone_coef=float(updates_raw.get("behavior_clone_coef", 0.0)),
         shaping_coef=float(updates_raw.get("shaping_coef", 0.0)),
