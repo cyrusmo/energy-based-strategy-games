@@ -19,7 +19,7 @@ flowchart LR
 ## Generate -> Evaluate -> Execute -> Update
 
 1. **Generate:** sample latent strategy embeddings from an Energy-Based Model (EBM) using Langevin dynamics, with named heuristic strategies included for debugging.
-2. **Evaluate:** score each candidate against sampled defender responses using average-case value, worst-case value, robustness, and an approximate exploitability proxy.
+2. **Evaluate:** score each candidate against sampled defender responses using average-case value, worst-case value, and $G$. Reported exploitability on Gridworld v2 is exact Nash exploitability; `sampled_response_gap` is only a training diagnostic.
 3. **Execute:** condition a policy on the selected strategy and roll it out in the gridworld.
 4. **Update:** store rollout summaries in a strategy buffer and leave explicit hooks for policy, EBM, and world-model updates.
 
@@ -112,9 +112,10 @@ Generated outputs under `outputs/public/` are ignored by default. Curated artifa
 - **average_case_value:** mean attacker value against sampled opponent responses.
 - **worst_case_value:** lowest attacker value against the sampled opponent set.
 - **robustness_score:** conservative proxy combining worst-case value and value variance.
-- **exploitability_proxy:** approximate vulnerability to sampled best responses. This is not exact Nash exploitability.
-- **strategy_diversity:** mean pairwise distance between latent strategy embeddings.
-- **zero-shot transfer:** held-out grid layouts (`default` vs `intercept_path`, `open_right`, `goal_near_defender`, `cramped`) compare the same baselines off the training map. This is a diagnostic for heuristic overfitting, not a solved transfer benchmark.
+- **sampled_response_gap:** average-minus-worst over sampled defenders. Formerly called `exploitability_proxy`; not Nash exploitability.
+- **exploitability:** exact $V_{\mathrm{Nash}}-V(\sigma,\mathrm{BR}(\sigma))$ on Gridworld v2 (`evaluation/exact.py`).
+- **strategy_diversity / strategy_entropy:** pairwise embedding distance and k-means assignment entropy.
+- **zero-shot transfer:** v1 held-out layouts (`intercept_path`, ...) plus v2 layouts (`evasive_detour`, `feint_switch`, `patient_hold`) where those named strategies are uniquely best (Gate 1).
 - **benchmark summary:** mean/std return, rates, sampled-response metrics where applicable, strategy diversity, and wall-clock time per environment/baseline.
 - **PursuitTrace:** versioned JSON artifact for multi-agent pursuit/evasion rollouts, including per-step actions, rewards, captures, active evaders, and summary metrics.
 - **pursuit empirical-game diagnostics:** rectangular scripted-policy matrix with pursuer policies as rows, evader policies as columns, `mean_pursuer_return` as the primary payoff, uniform-column empirical regret, maximin row policy, and a payoff-weighted row-policy ranking distribution. This is not an equilibrium solver.
@@ -125,7 +126,7 @@ Generated outputs under `outputs/public/` are ignored by default. Curated artifa
 
 ## Current Status
 
-This is a research scaffold and early-stage experimental framework. It does not claim state-of-the-art performance, convergence guarantees, or exact equilibrium computation. The current gridworld and evaluator are intentionally simple so the Generate -> Evaluate -> Execute -> Update loop can be inspected and tested end to end. The Day 2 loop includes lightweight REINFORCE-style policy updates, contrastive EBM updates, and one-step world-model fitting. The Day 3-7 harness adds public logging, rollout visualization, baseline comparison, payoff-matrix evaluation, and a benchmark runner. A first PPO attacker baseline is available for the custom gridworld, now with potential-based reward shaping, a longer default budget, and a public training diagnosis. A first PPO-lite `pursuer_0` path is available for multi-evader pursuit. These are live baselines, not strong policy claims. PettingZoo Pursuit is available as an optional transfer benchmark, not a replacement for the custom research gridworld.
+The paper testbed is Gridworld v2 (walls, two goals, exact Nash/BR). v1 is kept for snapshot reproduction. Gate 1 (non-degenerate payoff, unique-best layouts) is unit-tested. Gate 2 currently selects **diagnostic** framing: the EBM loop does not yet beat PPO and diversity-only on held-out v2 goal rate with separated 5-seed CIs (`outputs/public/gate2/summary.json`). Exact exploitability, PSRO-lite, and a parametric continuous controller are implemented. The world model is still not the BR engine.
 
 ## Research Roadmap
 

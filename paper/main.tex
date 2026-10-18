@@ -17,8 +17,8 @@
 \begin{abstract}
 We present an early research system for separating high-level strategy generation from low-level action execution in adversarial multi-agent environments.
 The system combines an energy-based model over latent strategy embeddings, approximate sampled-response evaluation, a strategy-conditioned policy, and lightweight update hooks for policy learning, contrastive energy learning, and one-step world-model fitting.
-The current contribution is methodological and diagnostic: the framework makes strategy generation, evaluation, execution, and update behavior inspectable as separate components.
-We explicitly report approximate metrics and negative diagnostic results; the present system does not claim state-of-the-art performance, Nash convergence, or exact exploitability.
+The current contribution is a complete methods scaffold on a redesigned gridworld: continuous energy-based strategy generation, exact finite-horizon Nash/best-response evaluation, and conference baselines (PPO, diversity-only, PSRO-lite).
+Gate 1 is passed (non-degenerate strategic trade-offs). Gate 2 currently fails, so we report the system as methodological and diagnostic rather than as a positive transfer result.
 \end{abstract}
 
 \section{Introduction}
@@ -32,53 +32,80 @@ This paper frames the contribution as an inspectable methods scaffold rather tha
 
 \section{Related Work}
 
-The project sits at the intersection of energy-based generative models, population and best-response methods for games, latent option or skill discovery, and model-based reinforcement learning.
-The related-work section should cover energy-based models for structured generation, PSRO-style population training, approximate exploitability and regret diagnostics, options or strategy embeddings, and world-model evaluation.
+\paragraph{Hierarchical and option-based RL.}
+The options framework~\cite{sutton1999options} introduces temporal abstraction through macro-actions, but options are typically hand-designed or discovered without adversarial evaluation.
+Skill-discovery methods such as DIAYN~\cite{eysencbach2018diayn} and variational intrinsic control~\cite{gregor2016vic} learn diverse behaviors via mutual-information objectives, yet they do not score skills against adversaries or compute game-theoretic quantities.
+Universal value functions~\cite{schaul2015uvfa} condition policies on goals; our embeddings encode \emph{how} to behave rather than \emph{what} to achieve, and the evaluator explicitly models adversarial responses.
+
+\paragraph{Population-based methods.}
+Policy-Space Response Oracles (PSRO)~\cite{lanctot2017psro} maintain a discrete population and compute a meta-Nash equilibrium, providing rigorous game-theoretic grounding at the cost of a growing policy set.
+League training in AlphaStar~\cite{vinyals2019alphastar} and Nash averaging~\cite{balduzzi2019openspiel} similarly evaluate agents against a constructed population.
+DeepNash~\cite{perolat2022deepnash} and $\alpha$-Rank~\cite{omidshafiei2019alpharank} scale equilibrium computation, but still operate over discrete policy sets.
+Our generator can be viewed as a continuous proposal distribution that supplies candidates to a PSRO-like evaluator.
+
+\paragraph{Regret minimization.}
+Counterfactual regret minimization~\cite{zinkevich2007cfr} and the Hart--Mas-Colell procedure~\cite{hart2000ce} converge to Nash or correlated equilibria by iteratively reducing regret.
+We treat the energy model as a continuous relaxation: high-exploitability strategies receive high energy and therefore vanishing probability mass under $p_\psi$.
+
+\paragraph{Latent-conditioned policies and implicit models.}
+Goal-conditioned RL and implicit behavioral cloning~\cite{florence2022ibc} show that energy-like models can represent multi-modal action distributions.
+We lift that idea from actions to strategy embeddings, so sampling explores behavioral modes rather than one-step actions.
+
+\paragraph{Energy-based models and world models.}
+Energy-based generative models~\cite{du2019implicit,grathwohl2020jem} capture multi-modal densities without a normalized decoder, and have been used for model-based planning~\cite{du2019ebmplanning}.
+Dreamer~\cite{hafner2020dreamer} and MuZero~\cite{schrittwieser2020muzero} learn predictive models for planning but do not compute opponent best responses.
+Our world model is an efficiency component for imagined rollouts; reported exploitability uses exact dynamic programming on the finite gridworld.
+PPO~\cite{schulman2017ppo} is the monolithic policy-gradient baseline.
+Recent open-ended search systems~\cite{novikov2025alphaevolve} motivate treating strategy invention as a generative problem rather than a single-policy optimization.
+
 
 \section{Method}
 
+\subsection{Problem formulation}
+Consider a two-player finite-horizon zero-sum game with state space $\mathcal{S}$, action spaces $\mathcal{A}_1,\mathcal{A}_2$, and attacker reward $R$.
+A strategy $\sigma\in\Sigma\subseteq\mathbb{R}^d$ parameterizes a family of policies $\pi_\theta(a\mid s,\sigma)$.
+The attacker value is $V(\sigma^{(1)},\sigma^{(2)})=\mathbb{E}[\sum_t \gamma^t R_t]$.
+Exact exploitability of $\sigma$ is $V_{\mathrm{Nash}}-V(\sigma,\mathrm{BR}(\sigma))$, computed by backward induction on Gridworld v2.
+The sampled response gap is a cheap training diagnostic and is never reported as exploitability.
+
 \subsection{Generate, Evaluate, Execute, Update}
 
-At each iteration, the system executes the following loop.
+At each iteration the system executes the following loop.
 \begin{enumerate}
-  \item \textbf{Generate}: sample latent strategy embeddings from an energy model using Langevin dynamics, optionally mixed with named heuristic strategies for debugging.
-  \item \textbf{Evaluate}: score candidates against sampled opponent heuristics using average-case value, worst-case value, a robustness score, and an exploitability proxy.
-  \item \textbf{Execute}: condition a policy on the selected strategy and roll it out in the attacker-defender gridworld.
-  \item \textbf{Update}: store rollout summaries in a strategy buffer and apply lightweight policy, energy-model, and world-model updates.
+  \item \textbf{Generate}: sample latent strategy embeddings from an energy model using Langevin dynamics, with at most one named heuristic as an optional anchor.
+  \item \textbf{Evaluate}: score candidates with $G(\sigma)=\alpha V(\sigma,\mathrm{BR}(\sigma))+(1-\alpha)\mathbb{E}[V]$ against scripted defenders; exact BR is available for reported numbers.
+  \item \textbf{Execute}: map $\sigma$ through a parametric controller or a strategy-conditioned policy.
+  \item \textbf{Update}: store rollout summaries in a strategy buffer and apply policy, contrastive-divergence EBM, and one-step world-model updates.
 \end{enumerate}
 
 \subsection{Energy-Based Strategy Generator}
 
-Let $z \in \mathbb{R}^d$ denote a latent strategy embedding and $E_\theta(z)$ denote a scalar energy.
-Candidate strategies are sampled by unadjusted Langevin dynamics:
+Let $z\in\mathbb{R}^d$ denote a latent strategy embedding and $E_\psi(z)$ a scalar energy.
+Candidates are sampled by unadjusted Langevin dynamics
 \[
-z_{t+1} = z_t - \frac{\eta}{2}\nabla_z E_\theta(z_t) + \epsilon_t,\quad \epsilon_t \sim \mathcal{N}(0, \eta I).
+z_{t+1}=z_t-\frac{\eta}{2}\nabla_z E_\psi(z_t)+\epsilon_t,\qquad \epsilon_t\sim\mathcal{N}(0,\eta I).
 \]
-The current implementation uses contrastive divergence-style training with high-scoring buffer strategies as positives and sampled strategies as negatives.
+Contrastive divergence uses high-scoring buffer strategies as positives and Langevin samples as negatives.
+The first six coordinates of $z$ are interpretable controller weights (directness, evasiveness, aggression, patience, feint, commit time), so arbitrary latents are executable without snapping to a 5-class lookup.
 
-\subsection{Sampled-Response Evaluation}
+\subsection{Exact and sampled evaluation}
 
-The evaluator is intentionally approximate.
-For a candidate strategy, it rolls out against a finite set of heuristic opponent responses and records average-case value, worst-case value, robustness, and an exploitability proxy.
-The exploitability proxy is a diagnostic over sampled responses only and must not be interpreted as Nash exploitability.
-
-\subsection{Strategy-Conditioned Execution}
-
-The policy receives both environment state and a latent strategy embedding.
-This design lets the same low-level policy execute different high-level strategies while preserving a separate inspection surface for strategy selection.
+Training-time selection may use sampled opponents.
+Reported exploitability uses dynamic programming: a minimizing defender against a fixed attacker policy, and a per-state $5\times 5$ Nash LP for the game value.
+The world model is an efficiency component and is not the source of reported best responses.
 
 \section{Experimental Setup}
 
 \subsection{Primary Environment}
 
-The main environment is a configurable attacker-defender gridworld.
-The attacker starts near one corner and must reach a goal before a greedy defender intercepts it.
-The environment is deliberately small so failures in generation, evaluation, and execution can be inspected directly.
+The paper testbed is Gridworld v2: a $7\times 7$ attacker--defender game with a split wall, two scoring goals, and named layouts in which \texttt{evasive}, \texttt{feint}, and \texttt{patient} are each uniquely best.
+v1 (open $10\times 10$, one goal) is retained only to reproduce the August 2026 diagnostic snapshot.
+Exact Nash values are tractable because the joint state $(p_{\mathrm{att}},p_{\mathrm{def}},t)$ has on the order of $10^4$--$10^5$ elements.
 
 \subsection{Baselines}
 
-We compare the strategy loop against a uniform random attacker, a direct-to-goal heuristic, and a PPO-lite actor-critic attacker.
-The direct-to-goal heuristic is expected to be strong in the default grid layout; its role is to prevent overclaiming from a weak learning baseline.
+We compare the strategy loop against PPO~\cite{schulman2017ppo}, a diversity-only Gaussian sampler without adversarial scoring, restricted PSRO~\cite{lanctot2017psro} over the named strategy set, and the direct-goal heuristic.
+PPO is evaluated on the same held-out layouts and against exact best-response defenders.
 
 \subsection{Ablations}
 
@@ -86,17 +113,27 @@ The paper-facing ablation suite covers EBM versus Gaussian sampling, buffer posi
 
 \section{Results}
 
-Results should be reported as diagnostics.
-Current values should be inserted from generated artifacts under \texttt{outputs/public/}, especially the baseline, multi-seed, ablation, and learning-study summaries.
-Until those artifacts are promoted into a paper table, this section should be read as a placeholder for diagnostic results rather than a source of hand-written metric claims.
-The expected interpretation is that the harness can expose failure modes; it is not evidence of robust multi-agent reasoning.
+All numerical claims are regenerated from \texttt{outputs/public/} by \texttt{scripts/reproduce\_paper\_results.sh}.
+Gate 1 is a unit-tested property of Gridworld v2: the train-map payoff matrix has at least three distinct best responses and no weakly dominant attacker row, and each of \texttt{evasive}, \texttt{feint}, and \texttt{patient} is uniquely best on a held-out layout.
 
-The fuller paper-facing results prose is maintained in \texttt{paper/results\_and\_limitations.tex} while the experiment suite is still evolving.
+Gate 2 compares the full method to PPO, diversity-only sampling, and PSRO-lite on held-out goal rate over five seeds.
+The framing of this paper is taken from \texttt{outputs/public/gate2/summary.json}: a positive transfer claim is allowed only when the method's held-out 95\% CI lies entirely above PPO and diversity-only.
+Until that file reports \texttt{passed: true}, results should be read as a methods-and-diagnostics paper with an exact evaluation harness, not as a claim that the EBM loop is already a stronger agent.
+
+Tables that belong in a camera-ready version, each filled from artifacts:
+\begin{itemize}
+  \item Train and held-out return / goal rate / exact value-versus-BR for every method.
+  \item Exact payoff heatmap on \texttt{corridor\_split}.
+  \item Ablation suite on v2 (sampler, selection, candidate count, world-model, heuristic anchors).
+  \item Exploitability versus environment steps (sample-efficiency curve).
+  \item Strategy-embedding projection colored by exact or sampled exploitability.
+\end{itemize}
 
 \section{Limitations}
 
-The present system does not claim state-of-the-art performance, convergence to equilibrium, exact Nash exploitability, or robust multi-agent reasoning.
-The evaluator uses sampled opponent responses, the world model is fit only on one-step transitions, and the pursuit/evasion infrastructure is currently a supplementary diagnostic track rather than an EBM-driven domain.
+Exact exploitability is available on Gridworld v2 but expensive if a mixed Nash LP is solved at every joint state; reported training loops therefore select with sampled $G$ and compute exact numbers on demand.
+The learned world model is not yet the best-response engine.
+Multi-evader pursuit, $n$-player CCE, and a proof of the energy-mass-on-equilibria conjecture are left to future work.
 
 \section{Reproducibility}
 
