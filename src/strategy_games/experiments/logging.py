@@ -100,6 +100,8 @@ def summarize_training_result(result: Mapping[str, Any]) -> dict[str, Any]:
         "final_selected_label": result.get("final_selected_label"),
         "buffer_size": result.get("buffer_size", 0),
         "buffer_diversity": result.get("buffer_diversity", 0.0),
+        "strategy_entropy": result.get("strategy_entropy", 0.0),
+        "env_steps": result.get("env_steps", 0),
         "mean_episode_return": _mean_metric(rollouts, "episode_return"),
         "mean_win_rate": _mean_metric(rollouts, "win_rate"),
         "mean_goal_rate": _mean_metric(rollouts, "goal_rate"),

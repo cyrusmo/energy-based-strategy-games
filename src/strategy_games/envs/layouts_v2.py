@@ -92,6 +92,9 @@ HELD_OUT_LAYOUTS_V2: dict[str, GridworldV2Config] = {
         defender_start=(0, 5),
         goal_positions=((6, 6), (0, 6)),
         max_steps=20,
+        # Equal-speed held-out map: Nash equals timeout, so exploitability has
+        # spread across layouts (train is winnable; this one is not).
+        defender_period=1,
     ),
 }
 

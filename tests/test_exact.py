@@ -62,3 +62,24 @@ def test_heuristic_exploitability_is_non_negative() -> None:
     exploit = exact_exploitability(config, _policy)
     assert exploit >= -1e-6
     assert np.isfinite(best_response_value(config, _policy))
+
+
+def test_stochastic_attacker_best_response_is_finite() -> None:
+    config = _tiny_config()
+
+    def _mix(_view):
+        return np.ones(5, dtype=np.float64) / 5.0
+
+    value = best_response_value(config, _mix)
+    assert np.isfinite(value)
+
+
+def test_policy_from_actor_critic_returns_valid_action() -> None:
+    from strategy_games.evaluation.exact import _StateView, policy_from_actor_critic
+    from strategy_games.training.ppo_baseline import ActorCriticPolicy
+
+    config = _tiny_config()
+    policy = ActorCriticPolicy(state_dim=11, action_dim=5, hidden_dim=8)
+    attacker = policy_from_actor_critic(policy)
+    action = attacker(_StateView(config, config.attacker_start, config.defender_start, 0))
+    assert action in {0, 1, 2, 3, 4}

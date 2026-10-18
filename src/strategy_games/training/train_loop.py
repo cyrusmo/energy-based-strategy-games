@@ -63,6 +63,7 @@ class TrainingConfig:
     robustness_weight: float = 0.5
     exploitability_weight: float = 0.5
     goal_rate_weight: float = 1.0
+    timeout_penalty_weight: float = 1.0
     robustness_alpha: float = 0.5
     compute_exact: bool = False
     use_robustness_g: bool = False
@@ -171,6 +172,7 @@ def run_training_loop(config: TrainingConfig | None = None) -> dict[str, object]
     )
     buffer = StrategyBuffer(capacity=1_000)
     history: list[dict[str, object]] = []
+    env_steps = 0
 
     for iteration in range(config.iterations):
         candidates = generate_candidate_strategies(ebm, config)
@@ -183,6 +185,7 @@ def run_training_loop(config: TrainingConfig | None = None) -> dict[str, object]
                 label=label,
                 policy=policy if config.evaluator_action_source == "policy" else None,
             )
+            env_steps += int(metrics.get("env_steps", 0))
             selection_score = selection_score_from_metrics(metrics, config)
             evaluated.append((selection_score, strategy.detach().cpu(), label, metrics))
 
@@ -199,6 +202,7 @@ def run_training_loop(config: TrainingConfig | None = None) -> dict[str, object]
             for _ in range(config.episodes_per_update)
         ]
         rollout_summary = summarize_trajectories(trajectories)
+        env_steps += int(sum(trajectory.steps for trajectory in trajectories))
 
         record = StrategyRecord(
             embedding=selected_strategy,
@@ -264,6 +268,7 @@ def run_training_loop(config: TrainingConfig | None = None) -> dict[str, object]
         "buffer_diversity": buffer.diversity(),
         "strategy_entropy": buffer.strategy_entropy(),
         "final_selected_label": history[-1]["selected_label"] if history else None,
+        "env_steps": int(env_steps),
         "device": str(device),
     }
 
@@ -335,11 +340,13 @@ def selection_score_from_metrics(metrics: dict[str, float | str], config: Traini
         else float(metrics["robustness_score"])
     )
     exploit = float(metrics["exploitability"]) if "exploitability" in metrics else float(metrics["exploitability_proxy"])
+    timeout_rate = float(metrics.get("timeout_rate", 0.0))
     return (
         config.average_value_weight * float(metrics["average_case_value"])
         + config.goal_rate_weight * float(metrics.get("goal_rate", 0.0))
         + config.robustness_weight * robustness
         - config.exploitability_weight * exploit
+        - config.timeout_penalty_weight * timeout_rate
     )
 
 

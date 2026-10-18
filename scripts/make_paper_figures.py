@@ -57,6 +57,10 @@ def main() -> None:
     draw_learning_study_summary(args.learning_json, args.output_dir / "learning_study_summary.png", compute=not args.no_compute)
     draw_v2_payoff_heatmap(Path("outputs/public/payoff_matrix_v2/matrix.json"), args.output_dir / "payoff_matrix_v2.png", compute=not args.no_compute)
     draw_gate2_summary(Path("outputs/public/gate2/summary.json"), args.output_dir / "gate2_summary.png")
+    draw_exploitability_vs_steps(
+        Path("outputs/public/gate2/rows.json"),
+        args.output_dir / "exploitability_vs_steps.png",
+    )
     write_manifest(
         args.output_dir,
         source_artifacts=[
@@ -283,19 +287,41 @@ def draw_v2_payoff_heatmap(json_path: Path, figure_path: Path, compute: bool = T
 
 
 def draw_gate2_summary(json_path: Path, figure_path: Path) -> None:
-    """Draw held-out goal-rate bars from a Gate 2 summary if present."""
+    """Draw exact-exploitability bars from a Gate 2 summary if present."""
 
     payload = load_json(json_path)
     if not isinstance(payload, dict) or not isinstance(payload.get("methods"), list):
         return
     names = [str(row["method"]) for row in payload["methods"]]
-    means = [float(row["heldout_goal_rate"]["mean"]) for row in payload["methods"]]
+    key = "exploitability" if "exploitability" in payload["methods"][0] else "heldout_goal_rate"
+    means = [float(row[key]["mean"]) for row in payload["methods"]]
     fig, ax = plt.subplots(figsize=(7, 4))
     ax.bar(names, means)
-    ax.set_ylim(0.0, 1.05)
-    ax.set_ylabel("Held-out goal rate")
+    ax.set_ylabel("Exact exploitability" if key == "exploitability" else "Held-out goal rate")
     ax.set_title(f"Gate 2 ({payload.get('framing', 'unknown')} framing)")
     ax.tick_params(axis="x", labelrotation=25)
+    fig.tight_layout()
+    save_figure(fig, figure_path)
+
+
+def draw_exploitability_vs_steps(json_path: Path, figure_path: Path) -> None:
+    """Draw exact exploitability against environment steps from Gate 2 rows."""
+
+    payload = load_json(json_path)
+    if not isinstance(payload, list) or not payload:
+        return
+    fig, ax = plt.subplots(figsize=(7, 4))
+    methods = sorted({str(row["method"]) for row in payload if isinstance(row, dict)})
+    for method in methods:
+        xs = [float(row.get("env_steps", 0.0)) for row in payload if row.get("method") == method]
+        ys = [float(row.get("exploitability", 0.0)) for row in payload if row.get("method") == method]
+        if not xs:
+            continue
+        ax.scatter(xs, ys, label=method)
+    ax.set_xlabel("Environment steps")
+    ax.set_ylabel("Exact exploitability")
+    ax.set_title("Gate 2 sample efficiency")
+    ax.legend()
     fig.tight_layout()
     save_figure(fig, figure_path)
 
@@ -324,6 +350,7 @@ def write_manifest(
             "learning_study_summary.png",
             "payoff_matrix_v2.png",
             "gate2_summary.png",
+            "exploitability_vs_steps.png",
         ],
         "note": "Regenerate after running ablation and learning-study scripts for final diagnostic values.",
     }

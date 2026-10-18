@@ -103,9 +103,10 @@ def summarize_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
     summary_rows = []
     for ablation, items in grouped.items():
         metric_values = {
-            "mean_episode_return": [float(item.get("mean_episode_return", 0.0)) for item in items],
-            "mean_win_rate": [float(item.get("mean_win_rate", 0.0)) for item in items],
-            "buffer_diversity": [float(item.get("buffer_diversity", 0.0)) for item in items],
+            "mean_episode_return": [_row_metric(item, "mean_episode_return") for item in items],
+            "mean_win_rate": [_row_metric(item, "mean_win_rate") for item in items],
+            "buffer_diversity": [_row_metric(item, "buffer_diversity", "strategy_diversity") for item in items],
+            "strategy_entropy": [_row_metric(item, "strategy_entropy") for item in items],
         }
         summary_rows.append(
             {
@@ -118,6 +119,8 @@ def summarize_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
                 "std_win_rate": std(metric_values["mean_win_rate"]),
                 "mean_buffer_diversity": mean(metric_values["buffer_diversity"]),
                 "std_buffer_diversity": std(metric_values["buffer_diversity"]),
+                "mean_strategy_entropy": mean(metric_values["strategy_entropy"]),
+                "std_strategy_entropy": std(metric_values["strategy_entropy"]),
             }
         )
     return {
@@ -164,6 +167,13 @@ def write_yaml(config: Mapping[str, Any], path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as handle:
         yaml.safe_dump(to_jsonable(config), handle, sort_keys=False)
+
+
+def _row_metric(item: Mapping[str, Any], *keys: str, default: float = 0.0) -> float:
+    for key in keys:
+        if key in item and item[key] is not None:
+            return float(item[key])
+    return default
 
 
 def mean(values: list[float]) -> float:

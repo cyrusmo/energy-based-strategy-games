@@ -268,6 +268,8 @@ def train_ppo_baseline(config: PPOConfig | None = None) -> dict[str, Any]:
         "learning_rate": float(config.learning_rate),
     }
     result["diagnosis"] = diagnose_ppo_training(result, config)
+    result["env_steps"] = int(steps_done)
+    result["_policy"] = policy
     return result
 
 
@@ -277,6 +279,7 @@ def train_ppo_from_config(path: str | Path = "configs/gridworld_ppo_baseline.yam
     raw = load_config(path)
     config = ppo_config_from_mapping(raw)
     result: dict[str, Any] = dict(train_ppo_baseline(config))
+    result.pop("_policy", None)
 
     logging_raw = raw.get("logging", {})
     if not isinstance(logging_raw, Mapping):
@@ -593,8 +596,9 @@ def save_ppo_metrics(metrics: Mapping[str, Any], path: str | Path) -> Path:
 
     output_path = Path(path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {key: value for key, value in metrics.items() if not str(key).startswith("_")}
     with output_path.open("w", encoding="utf-8") as handle:
-        json.dump(metrics, handle, indent=2, sort_keys=True)
+        json.dump(payload, handle, indent=2, sort_keys=True)
         handle.write("\n")
     return output_path
 

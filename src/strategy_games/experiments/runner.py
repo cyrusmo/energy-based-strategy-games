@@ -56,6 +56,7 @@ def run_from_config(path: str | Path) -> dict[str, object]:
         robustness_weight=float(selection_raw.get("robustness_weight", 0.5)),
         exploitability_weight=float(selection_raw.get("exploitability_weight", 0.5)),
         goal_rate_weight=float(selection_raw.get("goal_rate_weight", 1.0)),
+        timeout_penalty_weight=float(selection_raw.get("timeout_penalty_weight", 1.0)),
         robustness_alpha=float(selection_raw.get("robustness_alpha", evaluator_raw.get("robustness_alpha", 0.5))),
         compute_exact=bool(evaluator_raw.get("compute_exact", False)),
         use_robustness_g=bool(selection_raw.get("use_robustness_g", False)),

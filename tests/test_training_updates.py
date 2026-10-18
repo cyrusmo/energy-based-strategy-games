@@ -126,6 +126,25 @@ def test_selection_score_prefers_goal_reaching_candidate() -> None:
     assert selection_score_from_metrics(sometimes_wins, config) > selection_score_from_metrics(losing, config)
 
 
+def test_selection_score_prefers_scoring_over_timeout_hider() -> None:
+    config = TrainingConfig(timeout_penalty_weight=2.0)
+    timeout_hider = {
+        "average_case_value": -0.4,
+        "robustness_score": -0.4,
+        "exploitability": 0.0,
+        "goal_rate": 0.0,
+        "timeout_rate": 1.0,
+    }
+    scorer = {
+        "average_case_value": -0.6,
+        "robustness_score": -0.8,
+        "exploitability": 0.3,
+        "goal_rate": 0.25,
+        "timeout_rate": 0.0,
+    }
+    assert selection_score_from_metrics(scorer, config) > selection_score_from_metrics(timeout_hider, config)
+
+
 def test_buffer_score_prefers_goal_reaching_record() -> None:
     losing = StrategyRecord(
         embedding=torch.zeros(4),

@@ -18,7 +18,7 @@ from strategy_games.envs.pathfinding import apply_move, is_free
 from strategy_games.evaluation.best_response import attacker_v2_heuristic_action
 from strategy_games.strategies.controllers import parametric_attacker_action
 
-AttackerPolicy = Callable[[Any], int]
+AttackerPolicy = Callable[[Any], int | np.ndarray]
 
 
 class _StateView:
@@ -169,8 +169,31 @@ def _transition_value(
     return float(reward) + float(values[next_t, index[next_att], index[next_def]])
 
 
+def _attacker_action_probs(attacker_policy: AttackerPolicy, view: Any, actions: tuple[int, ...]) -> np.ndarray:
+    raw = attacker_policy(view)
+    n_actions = len(actions)
+    if isinstance(raw, (int, np.integer)):
+        probs = np.zeros(n_actions, dtype=np.float64)
+        action = int(raw)
+        if action not in ACTION_TO_DELTA:
+            action = 0
+        probs[actions.index(action)] = 1.0
+        return probs
+    probs = np.asarray(raw, dtype=np.float64).reshape(-1)
+    if probs.size != n_actions:
+        raise ValueError(f"attacker policy must return an action or {n_actions} probabilities")
+    probs = np.clip(probs, 0.0, None)
+    if float(probs.sum()) <= 0.0:
+        return np.ones(n_actions, dtype=np.float64) / n_actions
+    return probs / probs.sum()
+
+
 def best_response_value(config: GridworldV2Config, attacker_policy: AttackerPolicy) -> float:
-    """Attacker value against an exact minimizing defender."""
+    """Attacker value against an exact minimizing defender.
+
+    ``attacker_policy`` may return a deterministic action or a vector of action
+    probabilities. Mixtures (PSRO meta-Nash) use the latter.
+    """
 
     cells = _free_cells(config)
     index = {cell: i for i, cell in enumerate(cells)}
@@ -186,12 +209,15 @@ def best_response_value(config: GridworldV2Config, attacker_policy: AttackerPoli
                     values[t, ia, id_] = float(reward) if done else float(config.timeout_reward + config.step_penalty)
                     continue
                 view = _StateView(config, att, deff, t)
-                a_act = int(attacker_policy(view))
-                if a_act not in ACTION_TO_DELTA:
-                    a_act = 0
+                action_probs = _attacker_action_probs(attacker_policy, view, actions)
                 best = float("inf")
                 for d_act in actions:
-                    val = _transition_value(att, deff, t, a_act, d_act, config, cells, values)
+                    val = 0.0
+                    for ai, a_act in enumerate(actions):
+                        weight = float(action_probs[ai])
+                        if weight <= 0.0:
+                            continue
+                        val += weight * _transition_value(att, deff, t, a_act, d_act, config, cells, values)
                     if val < best:
                         best = val
                 values[t, ia, id_] = float(best)
@@ -202,6 +228,46 @@ def exact_exploitability(config: GridworldV2Config, attacker_policy: AttackerPol
     """Return ``V_nash - V(sigma, BR(sigma))`` from the attacker's perspective."""
 
     return float(nash_value(config) - best_response_value(config, attacker_policy))
+
+
+def policy_from_actor_critic(policy: Any) -> AttackerPolicy:
+    """Adapt a PPO ``ActorCriticPolicy`` to the exact-evaluation attacker API."""
+
+    def _act(view: Any) -> int:
+        import torch
+
+        from strategy_games.envs.gridworld_v2 import AttackerDefenderGridworldV2
+
+        env = AttackerDefenderGridworldV2(view.config)
+        env.attacker_pos = view.attacker_pos
+        env.defender_pos = view.defender_pos
+        env.steps = view.steps
+        device = next(policy.parameters()).device
+        state = torch.as_tensor(env.observe(), dtype=torch.float32, device=device)
+        return int(policy.act(state, deterministic=True))
+
+    return _act
+
+
+def policy_from_mixture(mix: dict[str, float]) -> AttackerPolicy:
+    """Return a stochastic attacker that samples from a labeled mixture."""
+
+    actions = tuple(ACTION_TO_DELTA)
+
+    def _act(view: Any) -> np.ndarray:
+        probs = np.zeros(len(actions), dtype=np.float64)
+        for label, weight in mix.items():
+            if weight <= 0.0:
+                continue
+            action = attacker_v2_heuristic_action(view, label)
+            if action not in ACTION_TO_DELTA:
+                action = 0
+            probs[actions.index(action)] += float(weight)
+        if float(probs.sum()) <= 0.0:
+            return np.ones(len(actions), dtype=np.float64) / len(actions)
+        return probs / probs.sum()
+
+    return _act
 
 
 def policy_from_strategy(strategy: Any, label: str | None = None, policy: Any | None = None) -> AttackerPolicy:
@@ -228,15 +294,9 @@ def policy_from_strategy(strategy: Any, label: str | None = None, policy: Any | 
     return _act
 
 
-def exact_metrics_for_strategy(
-    config: GridworldV2Config,
-    strategy: Any,
-    label: str | None = None,
-    policy: Any | None = None,
-) -> dict[str, float]:
-    """Return exact Nash value, BR value, and exploitability for one strategy."""
+def exact_metrics_for_policy(config: GridworldV2Config, attacker_policy: AttackerPolicy) -> dict[str, float]:
+    """Return exact Nash value, BR value, and exploitability for a policy."""
 
-    attacker_policy = policy_from_strategy(strategy, label=label, policy=policy)
     value_vs_br = best_response_value(config, attacker_policy)
     game_value = nash_value(config)
     return {
@@ -244,6 +304,19 @@ def exact_metrics_for_strategy(
         "exact_nash_value": float(game_value),
         "exploitability": float(game_value - value_vs_br),
     }
+
+
+def exact_metrics_for_strategy(
+    config: GridworldV2Config,
+    strategy: Any,
+    label: str | None = None,
+    policy: Any | None = None,
+    attacker_policy: AttackerPolicy | None = None,
+) -> dict[str, float]:
+    """Return exact Nash value, BR value, and exploitability for one strategy."""
+
+    resolved = attacker_policy or policy_from_strategy(strategy, label=label, policy=policy)
+    return exact_metrics_for_policy(config, resolved)
 
 
 def clear_exact_caches() -> None:

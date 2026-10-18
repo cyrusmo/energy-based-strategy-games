@@ -3,8 +3,10 @@ from pathlib import Path
 import yaml
 
 from strategy_games.envs.layouts import HELD_OUT_LAYOUT_NAMES, TRAIN_LAYOUT_NAME, get_layout, layout_names
+from strategy_games.envs.layouts_v2 import TRAIN_LAYOUT_V2_NAME
 from strategy_games.experiments.heldout_layouts import (
     HeldoutLayoutStudyConfig,
+    is_held_out_layout,
     run_heldout_layout_study,
     summarize_heldout_rows,
 )
@@ -94,3 +96,11 @@ def test_heldout_layout_study_smoke(tmp_path: Path) -> None:
     baselines = {row["baseline"] for row in result["rows"]}
     assert {"random_policy", "direct_goal_heuristic", "strategy_loop"} <= baselines
     assert result["summary"]["direct_goal_overfitting_visible"] is True
+
+
+def test_v2_train_layout_is_not_flagged_held_out() -> None:
+    assert TRAIN_LAYOUT_V2_NAME == "corridor_split"
+    assert is_held_out_layout("corridor_split") is False
+    assert is_held_out_layout("evasive_detour") is True
+    assert is_held_out_layout("default") is False
+    assert is_held_out_layout("intercept_path") is True

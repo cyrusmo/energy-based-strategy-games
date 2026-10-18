@@ -111,6 +111,7 @@ class GameTheoreticEvaluator:
             "timeout_rate": float(timeout_rate),
             "win_rate": float(goal_rate),
             "best_response_label": best_response_label,
+            "env_steps": float(sum(result.steps for result in results)),
         }
         if self.compute_exact and isinstance(self.env_config, GridworldV2Config):
             from strategy_games.evaluation.exact import exact_metrics_for_strategy

@@ -18,7 +18,7 @@ from strategy_games.envs.layouts import (
     get_layout,
     layout_names,
 )
-from strategy_games.envs.layouts_v2 import HELD_OUT_LAYOUTS_V2, get_layout_v2
+from strategy_games.envs.layouts_v2 import HELD_OUT_LAYOUTS_V2, TRAIN_LAYOUT_V2_NAME, get_layout_v2
 from strategy_games.experiments.logging import to_jsonable
 from strategy_games.experiments.runner import run_from_config
 from strategy_games.training.ppo_baseline import (
@@ -28,6 +28,14 @@ from strategy_games.training.ppo_baseline import (
     train_ppo_baseline,
 )
 from strategy_games.utils.config import load_config
+
+def is_held_out_layout(layout_name: str) -> bool:
+    """Return whether ``layout_name`` is held out of the matching train split."""
+
+    if layout_name in HELD_OUT_LAYOUTS_V2:
+        return layout_name != TRAIN_LAYOUT_V2_NAME
+    return layout_name != TRAIN_LAYOUT_NAME
+
 
 HELDOUT_ROW_FIELDS = (
     "layout",
@@ -70,7 +78,7 @@ def run_heldout_layout_study(config: HeldoutLayoutStudyConfig | None = None) -> 
     rows: list[dict[str, Any]] = []
     for layout_name in config.layouts:
         env_config = get_layout_v2(layout_name) if layout_name in HELD_OUT_LAYOUTS_V2 else get_layout(layout_name)
-        held_out = layout_name != TRAIN_LAYOUT_NAME
+        held_out = is_held_out_layout(layout_name)
         rows.append(_baseline_row("random_policy", layout_name, held_out, run_random_policy_baseline(
             episodes=config.episodes, seed=config.seed, env_config=env_config
         )))

@@ -18,4 +18,5 @@ def test_v2_strategy_loop_one_iteration() -> None:
     )
     assert result["history"]
     assert "strategy_entropy" in result
+    assert result["env_steps"] > 0
     assert result["history"][0]["rollout"]["steps"] >= 1

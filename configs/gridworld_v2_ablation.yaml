@@ -18,6 +18,7 @@ env:
     - [6, 3]
   catch_radius: 0
   slip_prob: 0.0
+  defender_period: 2
 
 training:
   iterations: 2
@@ -31,6 +32,7 @@ sampler:
 evaluator:
   action_source: heuristic
   episodes_per_opponent: 1
+  compute_exact: false
 
 executor:
   action_source: parametric

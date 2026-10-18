@@ -2,7 +2,8 @@
 
 Gridworld v2 is the paper testbed: walls, two goals, and layouts in which evasive, feint, and patient are uniquely best (Gate 1).
 Exact exploitability is implemented in \texttt{evaluation/exact.py}.
-Gate 2 writes \texttt{outputs/public/gate2/summary.json} and sets the paper framing to positive only if the strategy loop beats PPO and diversity-only on held-out goal rate with separated 95\% CIs.
+Gate 2 writes \texttt{outputs/public/gate2/summary.json} and sets the paper framing to positive only if the strategy loop has lower exact exploitability than PPO and diversity-only with separated 95\% CIs.
+The October 18 retune makes the train layout winnable ($V_{\mathrm{Nash}}=0.746$) while keeping \texttt{open\_bottom} at the timeout Nash value.
 Until that gate passes, keep the abstract's diagnostic language.
 
 \section{Diagnostic Results Draft}
