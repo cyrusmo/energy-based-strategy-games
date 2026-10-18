@@ -39,6 +39,7 @@ class GridworldV2Config:
     catch_reward: float = -1.0
     timeout_reward: float = -0.2
     slip_prob: float = 0.0
+    defender_period: int = 1
     seed: int | None = None
 
     @property
@@ -82,6 +83,7 @@ def gridworld_v2_config_from_mapping(raw: dict[str, Any]) -> GridworldV2Config:
         catch_reward=float(raw.get("catch_reward", -1.0)),
         timeout_reward=float(raw.get("timeout_reward", -0.2)),
         slip_prob=float(raw.get("slip_prob", 0.0)),
+        defender_period=int(raw.get("defender_period", 1)),
         seed=None if raw.get("seed") is None else int(raw["seed"]),
     )
 
@@ -197,6 +199,8 @@ class AttackerDefenderGridworldV2:
             defender_action = self._default_defender_action()
         if defender_action not in ACTION_TO_DELTA:
             raise ValueError(f"defender_action must be in {sorted(ACTION_TO_DELTA)}, got {defender_action}")
+        if not defender_acts_this_step(self.steps, self.config.defender_period):
+            defender_action = 0
 
         self.attacker_pos = self._stochastic_move(self.attacker_pos, attacker_action)
         self.defender_pos = self._stochastic_move(self.defender_pos, defender_action)
@@ -273,6 +277,8 @@ class AttackerDefenderGridworldV2:
             raise ValueError("goal_positions must be non-empty")
         if not 0.0 <= self.config.slip_prob < 1.0:
             raise ValueError("slip_prob must be in [0, 1)")
+        if self.config.defender_period < 1:
+            raise ValueError("defender_period must be at least 1")
         for name, pos in (
             ("attacker_start", self.config.attacker_start),
             ("defender_start", self.config.defender_start),
@@ -288,6 +294,14 @@ class AttackerDefenderGridworldV2:
     def _validate_position(self, pos: Position, name: str) -> None:
         if not is_free(pos, self.config.grid_size, self.config.obstacles):
             raise ValueError(f"{name}={pos} is blocked or outside the grid")
+
+
+def defender_acts_this_step(steps: int, defender_period: int) -> bool:
+    """Return whether the defender is allowed to leave its cell at ``steps``."""
+
+    if defender_period < 1:
+        raise ValueError("defender_period must be at least 1")
+    return steps % defender_period == 0
 
 
 def resolve_v2_outcome(

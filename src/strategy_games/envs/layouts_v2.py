@@ -42,6 +42,7 @@ def _v2(
     obstacles: frozenset[tuple[int, int]] = SPLIT_WALL,
     slip_prob: float = 0.0,
     catch_radius: int = 0,
+    defender_period: int = 2,
 ) -> GridworldV2Config:
     return GridworldV2Config(
         grid_size=7,
@@ -52,6 +53,7 @@ def _v2(
         obstacles=obstacles,
         catch_radius=catch_radius,
         slip_prob=slip_prob,
+        defender_period=defender_period,
     )
 
 

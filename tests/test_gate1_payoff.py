@@ -26,4 +26,7 @@ def test_gate1_payoff_matrix_is_non_degenerate() -> None:
     assert train["weakly_dominating_rows"] == [], train
     for label, item in report["unique_best"].items():
         assert item["summary"]["unique_best_strategy"] == label, (label, item["summary"])
+    assert report["nash_winnable"], report
+    assert report["nash_has_negative_heldout"], report
+    assert report["train_nash_value"] > report["train_timeout_value"]
     assert report["passed"]

@@ -13,7 +13,7 @@ from typing import Any, Callable
 import numpy as np
 
 from strategy_games.envs.gridworld import ACTION_TO_DELTA
-from strategy_games.envs.gridworld_v2 import GridworldV2Config, resolve_v2_outcome
+from strategy_games.envs.gridworld_v2 import GridworldV2Config, defender_acts_this_step, resolve_v2_outcome
 from strategy_games.envs.pathfinding import apply_move, is_free
 from strategy_games.evaluation.best_response import attacker_v2_heuristic_action
 from strategy_games.strategies.controllers import parametric_attacker_action
@@ -160,7 +160,8 @@ def _transition_value(
         index = _transition_value._index_cache  # type: ignore[attr-defined]
 
     next_att = apply_move(att, a_act, config.grid_size, config.obstacles)
-    next_def = apply_move(deff, d_act, config.grid_size, config.obstacles)
+    applied_def = d_act if defender_acts_this_step(t, config.defender_period) else 0
+    next_def = apply_move(deff, applied_def, config.grid_size, config.obstacles)
     next_t = t + 1
     reward, done = resolve_v2_outcome(next_att, next_def, next_t, config)[:2]
     if done:

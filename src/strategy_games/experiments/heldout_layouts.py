@@ -258,6 +258,7 @@ def _env_mapping(env_config: Any) -> dict[str, Any]:
         payload["goal_positions"] = [list(goal) for goal in env_config.goal_positions]
         payload["obstacles"] = [list(item) for item in sorted(env_config.obstacles)]
         payload["slip_prob"] = float(getattr(env_config, "slip_prob", 0.0))
+        payload["defender_period"] = int(getattr(env_config, "defender_period", 1))
     else:
         payload["goal_pos"] = list(env_config.goal_pos)
     return payload

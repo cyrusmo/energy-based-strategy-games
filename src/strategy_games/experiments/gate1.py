@@ -8,9 +8,11 @@ import numpy as np
 
 from strategy_games.envs.layouts_v2 import (
     GATE1_UNIQUE_BEST_LAYOUTS,
+    HELD_OUT_LAYOUT_V2_NAMES,
     TRAIN_LAYOUT_V2_NAME,
     get_layout_v2,
 )
+from strategy_games.evaluation.exact import nash_value
 from strategy_games.experiments.payoff import compute_payoff_matrix
 from strategy_games.strategies.embeddings import available_heuristic_strategies
 
@@ -51,10 +53,18 @@ def evaluate_gate1(strategy_dim: int = 8) -> dict[str, Any]:
             "summary": summarize_payoff_matrix(result),
             "matrix": result,
         }
+    train_config = get_layout_v2(TRAIN_LAYOUT_V2_NAME)
+    train_nash = float(nash_value(train_config))
+    timeout_value = float(train_config.max_steps * train_config.step_penalty + train_config.timeout_reward)
+    heldout_nash = {name: float(nash_value(get_layout_v2(name))) for name in HELD_OUT_LAYOUT_V2_NAMES}
+    nash_winnable = train_nash > timeout_value + 1e-6
+    nash_has_negative_heldout = any(value < 0.0 for value in heldout_nash.values())
     passed = (
         train_summary["distinct_best_response_count"] >= 3
         and not train_summary["weakly_dominating_rows"]
         and all(item["summary"]["unique_best_strategy"] == label for label, item in unique_best.items())
+        and nash_winnable
+        and nash_has_negative_heldout
     )
     return {
         "passed": passed,
@@ -62,6 +72,11 @@ def evaluate_gate1(strategy_dim: int = 8) -> dict[str, Any]:
         "train": {"matrix": train, "summary": train_summary},
         "unique_best": unique_best,
         "heuristic_strategies": list(available_heuristic_strategies()),
+        "train_nash_value": train_nash,
+        "train_timeout_value": timeout_value,
+        "heldout_nash_values": heldout_nash,
+        "nash_winnable": nash_winnable,
+        "nash_has_negative_heldout": nash_has_negative_heldout,
     }
 
 

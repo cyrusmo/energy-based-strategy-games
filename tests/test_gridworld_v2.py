@@ -47,6 +47,24 @@ def test_v2_scores_on_either_goal() -> None:
     assert result.info["outcome"] == "goal"
 
 
+def test_defender_period_forces_stay_on_off_beats() -> None:
+    config = GridworldV2Config(
+        grid_size=5,
+        max_steps=5,
+        attacker_start=(0, 0),
+        defender_start=(2, 2),
+        goal_positions=((0, 4), (4, 0)),
+        obstacles=frozenset(),
+        defender_period=2,
+    )
+    env = AttackerDefenderGridworldV2(config)
+    env.reset()
+    env.step(attacker_action=2, defender_action=4)
+    assert env.defender_pos == (2, 3)
+    env.step(attacker_action=2, defender_action=4)
+    assert env.defender_pos == (2, 3)
+
+
 def test_bfs_paths_around_split_wall() -> None:
     start = (0, 0)
     goal = (0, 6)
