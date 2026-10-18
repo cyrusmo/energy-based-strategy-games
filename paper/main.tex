@@ -18,7 +18,7 @@
 We present an early research system for separating high-level strategy generation from low-level action execution in adversarial multi-agent environments.
 The system combines an energy-based model over latent strategy embeddings, approximate sampled-response evaluation, a strategy-conditioned policy, and lightweight update hooks for policy learning, contrastive energy learning, and one-step world-model fitting.
 The current contribution is a complete methods scaffold on a redesigned gridworld: continuous energy-based strategy generation, exact finite-horizon Nash/best-response evaluation, and conference baselines (PPO, diversity-only, PSRO-lite).
-Gate 1 is passed (non-degenerate strategic trade-offs). Gate 2 is decided by exact Nash exploitability, not held-out goal rate; the abstract framing is taken from the regenerated \texttt{outputs/public/gate2/summary.json}.
+Gate 1 is passed (non-degenerate strategic trade-offs). Gate 2 fails: the strategy loop's exact exploitability CI does not lie below PPO or diversity-only, so we report the system as methodological and diagnostic rather than as a positive transfer result.
 \end{abstract}
 
 \section{Introduction}
@@ -121,9 +121,11 @@ Table~\ref{tab:exact-nash} reports exact Nash values and scripted-strategy explo
 The train map is winnable ($V_{\mathrm{Nash}}=0.746 > -0.400$), and \texttt{open\_bottom} is an equal-speed held-out map whose Nash value equals timeout ($-0.400$).
 Every named heuristic has exploitability $0.70$--$2.08$ because an exact best-response defender catches a committed script.
 
-Gate 2 compares the full method to PPO (4096 steps), diversity-only sampling, and PSRO-lite on exact exploitability over five seeds.
-The framing of this paper is taken from \texttt{outputs/public/gate2/summary.json}: a positive transfer claim is allowed only when the method's 95\% CI lies entirely below PPO and diversity-only.
-Until that file reports \texttt{passed: true}, results should be read as a methods-and-diagnostics paper with an exact evaluation harness, not as a claim that the EBM loop is already a stronger agent.
+Gate 2 compares the full method to PPO (4096 steps), diversity-only sampling, and PSRO-lite on exact exploitability over five seeds (Table~\ref{tab:gate2}).
+\texttt{outputs/public/gate2/summary.json} reports \texttt{passed: false} and \texttt{framing: diagnostic}.
+PPO has the lowest exact exploitability ($1.606$); the strategy loop is $1.740$ $[1.696,1.784]$ and does not separate from PPO or diversity-only.
+Every method remains far from Nash: value versus an exact best-response defender is about $-1.1$ to $-1.2$ while $V_{\mathrm{Nash}}=0.746$ on the train map.
+The honest finding is that robustness-aware selection on a now-winnable game still converges to highly exploitable committed scripts (usually \texttt{aggressive}), not to a low-exploitability attacker.
 
 \begin{table}[t]
 \centering
@@ -143,18 +145,27 @@ Layout & $V_{\mathrm{Nash}}$ & Timeout & aggressive & evasive & feint & patient 
 \end{tabular}
 \end{table}
 
-Tables that belong in a camera-ready version, each filled from artifacts:
-\begin{itemize}
-  \item Gate 2 exact exploitability, value-versus-BR, held-out goal rate, and environment steps.
-  \item Exact payoff heatmap on \texttt{corridor\_split}.
-  \item Ablation suite on v2 (sampler, selection, candidate count, world-model, heuristic anchors).
-  \item Exploitability versus environment steps (sample-efficiency curve).
-  \item Strategy-embedding projection colored by exact or sampled exploitability.
-\end{itemize}
+\begin{table}[t]
+\centering
+\caption{Gate 2 five-seed exact exploitability (lower is better). CIs are 95\%.}
+\label{tab:gate2}
+\begin{tabular}{lrrrr}
+\toprule
+Method & Exploitability & Value vs BR & Held-out goal & Env.\ steps \\
+\midrule
+PPO & $1.606$ $[1.606,1.606]$ & $-1.190$ & $0.333$ & $4096$ \\
+Strategy loop & $1.740$ $[1.696,1.784]$ & $-1.134$ & $0.053$ & $10435$ \\
+Diversity-only & $1.797$ $[1.772,1.822]$ & $-1.192$ & $0.373$ & $10708$ \\
+PSRO-lite & $1.811$ $[1.811,1.811]$ & $-1.200$ & $0.333$ & $1000$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Figures regenerated from the same artifacts: the v2 payoff heatmap, Gate 2 exploitability bars, and exploitability versus environment steps.
 
 \section{Limitations}
 
-Exact exploitability is available on Gridworld v2 but expensive if a mixed Nash LP is solved at every joint state; reported training loops therefore select with sampled $G$ and compute exact numbers on demand.
+Exact exploitability is available on Gridworld v2 but expensive (about $1$--$6$\,s per candidate best response); the paper training config uses it for selection, while the ablation config keeps sampled $G$.
 The learned world model is not yet the best-response engine.
 Multi-evader pursuit, $n$-player CCE, and a proof of the energy-mass-on-equilibria conjecture are left to future work.
 
