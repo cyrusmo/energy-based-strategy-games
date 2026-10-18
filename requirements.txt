@@ -3,6 +3,7 @@ numpy>=1.24
 torch>=2.0
 PyYAML>=6.0
 matplotlib>=3.7
+scipy>=1.11
 
 # Public notebooks and local development.
 ipykernel>=6.0
