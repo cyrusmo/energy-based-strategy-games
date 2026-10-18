@@ -1,0 +1,10 @@
+study:
+  seeds: [0, 1, 2, 3, 4]
+  strategy_config: configs/gridworld_v2.yaml
+  ppo_config: configs/gridworld_v2_ppo.yaml
+  output_dir: outputs/public/learning_study_v2
+  include_ppo: true
+  ppo_total_steps: 256
+  strategy_iterations: 3
+  task_success_metric: goal_rate
+  min_completed_seeds: 3

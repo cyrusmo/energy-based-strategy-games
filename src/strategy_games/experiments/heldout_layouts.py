@@ -18,6 +18,7 @@ from strategy_games.envs.layouts import (
     get_layout,
     layout_names,
 )
+from strategy_games.envs.layouts_v2 import HELD_OUT_LAYOUTS_V2, get_layout_v2
 from strategy_games.experiments.logging import to_jsonable
 from strategy_games.experiments.runner import run_from_config
 from strategy_games.training.ppo_baseline import (
@@ -68,7 +69,7 @@ def run_heldout_layout_study(config: HeldoutLayoutStudyConfig | None = None) -> 
 
     rows: list[dict[str, Any]] = []
     for layout_name in config.layouts:
-        env_config = get_layout(layout_name)
+        env_config = get_layout_v2(layout_name) if layout_name in HELD_OUT_LAYOUTS_V2 else get_layout(layout_name)
         held_out = layout_name != TRAIN_LAYOUT_NAME
         rows.append(_baseline_row("random_policy", layout_name, held_out, run_random_policy_baseline(
             episodes=config.episodes, seed=config.seed, env_config=env_config
@@ -178,14 +179,7 @@ def write_heldout_outputs(output_dir: Path, rows: Sequence[Mapping[str, Any]], s
 def _run_strategy_loop(config: HeldoutLayoutStudyConfig, layout_name: str, env_config: Any) -> dict[str, Any]:
     raw = copy.deepcopy(dict(load_config(config.strategy_config_path)))
     raw["seed"] = int(config.seed)
-    raw["env"] = {
-        "grid_size": env_config.grid_size,
-        "max_steps": env_config.max_steps,
-        "attacker_start": list(env_config.attacker_start),
-        "defender_start": list(env_config.defender_start),
-        "goal_pos": list(env_config.goal_pos),
-        "catch_radius": env_config.catch_radius,
-    }
+    raw["env"] = _env_mapping(env_config)
     training = dict(raw.get("training", {}))
     training["iterations"] = int(config.strategy_iterations)
     raw["training"] = training
@@ -249,6 +243,24 @@ def _strategy_row(layout_name: str, held_out: bool, result: Mapping[str, Any]) -
         "timeout_rate": _mean_metric("timeout_rate"),
         "final_selected_label": str(result.get("final_selected_label", "")),
     }
+
+
+def _env_mapping(env_config: Any) -> dict[str, Any]:
+    payload = {
+        "grid_size": env_config.grid_size,
+        "max_steps": env_config.max_steps,
+        "attacker_start": list(env_config.attacker_start),
+        "defender_start": list(env_config.defender_start),
+        "catch_radius": env_config.catch_radius,
+    }
+    if hasattr(env_config, "goal_positions"):
+        payload["version"] = "v2"
+        payload["goal_positions"] = [list(goal) for goal in env_config.goal_positions]
+        payload["obstacles"] = [list(item) for item in sorted(env_config.obstacles)]
+        payload["slip_prob"] = float(getattr(env_config, "slip_prob", 0.0))
+    else:
+        payload["goal_pos"] = list(env_config.goal_pos)
+    return payload
 
 
 def _mean(values: Sequence[float]) -> float:

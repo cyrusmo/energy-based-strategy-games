@@ -1,0 +1,16 @@
+study:
+  layouts:
+    - corridor_split
+    - evasive_detour
+    - feint_switch
+    - patient_hold
+    - open_bottom
+  episodes: 4
+  seed: 0
+  strategy_config: configs/gridworld_v2.yaml
+  ppo_config: configs/gridworld_v2_ppo.yaml
+  output_dir: outputs/public/heldout_layouts_v2
+  include_strategy_loop: true
+  include_ppo: true
+  strategy_iterations: 3
+  ppo_total_steps: 256

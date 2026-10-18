@@ -55,6 +55,8 @@ def main() -> None:
     draw_embedding_projection(args.output_dir / "strategy_embedding_projection.png")
     draw_ablation_summary(args.ablation_json, args.output_dir / "ablation_summary.png", compute=not args.no_compute)
     draw_learning_study_summary(args.learning_json, args.output_dir / "learning_study_summary.png", compute=not args.no_compute)
+    draw_v2_payoff_heatmap(Path("outputs/public/payoff_matrix_v2/matrix.json"), args.output_dir / "payoff_matrix_v2.png", compute=not args.no_compute)
+    draw_gate2_summary(Path("outputs/public/gate2/summary.json"), args.output_dir / "gate2_summary.png")
     write_manifest(
         args.output_dir,
         source_artifacts=[
@@ -255,6 +257,49 @@ def draw_learning_study_summary(json_path: Path, figure_path: Path, compute: boo
     save_figure(fig, figure_path)
 
 
+def draw_v2_payoff_heatmap(json_path: Path, figure_path: Path, compute: bool = True) -> None:
+    """Draw the v2 payoff heatmap, computing it if needed."""
+
+    payload = load_json(json_path)
+    if payload is None:
+        if not compute:
+            return
+        from strategy_games.envs.layouts_v2 import get_layout_v2
+
+        payload = compute_payoff_matrix(env_config=get_layout_v2("corridor_split"))
+        json_path.parent.mkdir(parents=True, exist_ok=True)
+        json_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    matrix = np.asarray(payload["average_reward_matrix"], dtype=np.float64)
+    fig, ax = plt.subplots(figsize=(6, 5))
+    image = ax.imshow(matrix, cmap="RdBu")
+    ax.set_xticks(range(len(payload["opponent_labels"])))
+    ax.set_xticklabels(list(payload["opponent_labels"]), rotation=30, ha="right")
+    ax.set_yticks(range(len(payload["strategy_labels"])))
+    ax.set_yticklabels(list(payload["strategy_labels"]))
+    ax.set_title("Gridworld v2 payoff (attacker rows)")
+    fig.colorbar(image, ax=ax, fraction=0.046)
+    fig.tight_layout()
+    save_figure(fig, figure_path)
+
+
+def draw_gate2_summary(json_path: Path, figure_path: Path) -> None:
+    """Draw held-out goal-rate bars from a Gate 2 summary if present."""
+
+    payload = load_json(json_path)
+    if not isinstance(payload, dict) or not isinstance(payload.get("methods"), list):
+        return
+    names = [str(row["method"]) for row in payload["methods"]]
+    means = [float(row["heldout_goal_rate"]["mean"]) for row in payload["methods"]]
+    fig, ax = plt.subplots(figsize=(7, 4))
+    ax.bar(names, means)
+    ax.set_ylim(0.0, 1.05)
+    ax.set_ylabel("Held-out goal rate")
+    ax.set_title(f"Gate 2 ({payload.get('framing', 'unknown')} framing)")
+    ax.tick_params(axis="x", labelrotation=25)
+    fig.tight_layout()
+    save_figure(fig, figure_path)
+
+
 def write_manifest(
     output_dir: Path,
     source_artifacts: list[Path] | None = None,
@@ -277,6 +322,8 @@ def write_manifest(
             "strategy_embedding_projection.png",
             "ablation_summary.png",
             "learning_study_summary.png",
+            "payoff_matrix_v2.png",
+            "gate2_summary.png",
         ],
         "note": "Regenerate after running ablation and learning-study scripts for final diagnostic values.",
     }

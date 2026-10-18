@@ -17,6 +17,7 @@ def compute_payoff_matrix(
     opponent_labels: list[str] | tuple[str, ...] | None = None,
     strategy_dim: int = 8,
     episodes_per_opponent: int = 1,
+    env_config: Any | None = None,
 ) -> dict[str, object]:
     """Compute average attacker reward for strategies against opponent heuristics."""
 
@@ -30,6 +31,7 @@ def compute_payoff_matrix(
         row: list[float] = []
         for opponent_label in opponents:
             evaluator = GameTheoreticEvaluator(
+                env_config=env_config,
                 opponent_labels=(opponent_label,),
                 episodes_per_opponent=episodes_per_opponent,
                 strategy_dim=strategy_dim,

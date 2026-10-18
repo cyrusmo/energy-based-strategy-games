@@ -10,7 +10,14 @@ from torch.distributions import Categorical
 from torch.nn import functional as F
 
 from strategy_games.envs.gridworld import AttackerDefenderGridworld, GridworldConfig, gridworld_potential
+from strategy_games.envs.gridworld_v2 import (
+    GridworldV2Config,
+    gridworld_v2_potential,
+    is_v2_env,
+    make_gridworld,
+)
 from strategy_games.evaluation.best_response import GameTheoreticEvaluator, attacker_heuristic_action
+from strategy_games.strategies.controllers import parametric_attacker_action
 from strategy_games.experiments.convergence import detect_convergence
 from strategy_games.models.ebm import EnergyMLP, contrastive_divergence_loss
 from strategy_games.models.policy import StrategyConditionedPolicy
@@ -56,6 +63,9 @@ class TrainingConfig:
     robustness_weight: float = 0.5
     exploitability_weight: float = 0.5
     goal_rate_weight: float = 1.0
+    robustness_alpha: float = 0.5
+    compute_exact: bool = False
+    use_robustness_g: bool = False
     use_buffer_positives: bool = True
     train_policy: bool = True
     train_ebm: bool = True
@@ -72,7 +82,7 @@ class TrainingConfig:
     convergence_min_iter: int = 1
     early_stop_on_convergence: bool = False
     device: str = "auto"
-    env: GridworldConfig = field(default_factory=GridworldConfig)
+    env: GridworldConfig | GridworldV2Config = field(default_factory=GridworldConfig)
 
 
 @dataclass
@@ -134,7 +144,7 @@ def run_training_loop(config: TrainingConfig | None = None) -> dict[str, object]
     set_global_seed(config.seed)
     device = resolve_device(config.device, job="langevin_sampling")
 
-    env = AttackerDefenderGridworld(config.env)
+    env = make_gridworld(config.env)
     ebm = EnergyMLP(config.strategy_dim, hidden_dim=config.ebm_hidden_dim).to(device=device, dtype=torch.float32)
     policy = StrategyConditionedPolicy(
         env.state_dim,
@@ -156,6 +166,8 @@ def run_training_loop(config: TrainingConfig | None = None) -> dict[str, object]
         episodes_per_opponent=config.episodes_per_opponent,
         strategy_dim=config.strategy_dim,
         seed=config.seed,
+        compute_exact=config.compute_exact,
+        robustness_alpha=config.robustness_alpha,
     )
     buffer = StrategyBuffer(capacity=1_000)
     history: list[dict[str, object]] = []
@@ -192,7 +204,9 @@ def run_training_loop(config: TrainingConfig | None = None) -> dict[str, object]
             embedding=selected_strategy,
             episode_return=float(rollout_summary["episode_return"]),
             robustness_score=float(selected_metrics["robustness_score"]),
-            exploitability_proxy=float(selected_metrics["exploitability_proxy"]),
+            exploitability_proxy=float(
+                selected_metrics.get("exploitability", selected_metrics["exploitability_proxy"])
+            ),
             average_case_value=float(selected_metrics["average_case_value"]),
             worst_case_value=float(selected_metrics["worst_case_value"]),
             goal_rate=float(selected_metrics["goal_rate"]),
@@ -221,6 +235,7 @@ def run_training_loop(config: TrainingConfig | None = None) -> dict[str, object]
             {
                 "iteration": iteration,
                 "selected_label": selected_label or "latent",
+                "selected_strategy": selected_strategy.detach().cpu().tolist(),
                 "selection_metrics": selected_metrics,
                 "rollout": rollout_summary,
                 "buffer_size": len(buffer),
@@ -247,6 +262,7 @@ def run_training_loop(config: TrainingConfig | None = None) -> dict[str, object]
         "history": history,
         "buffer_size": len(buffer),
         "buffer_diversity": buffer.diversity(),
+        "strategy_entropy": buffer.strategy_entropy(),
         "final_selected_label": history[-1]["selected_label"] if history else None,
         "device": str(device),
     }
@@ -313,11 +329,17 @@ def selection_score_from_metrics(metrics: dict[str, float | str], config: Traini
 
     if not config.robustness_aware_selection:
         return float(metrics["average_case_value"])
+    robustness = (
+        float(metrics["robustness_score_g"])
+        if config.use_robustness_g and "robustness_score_g" in metrics
+        else float(metrics["robustness_score"])
+    )
+    exploit = float(metrics["exploitability"]) if "exploitability" in metrics else float(metrics["exploitability_proxy"])
     return (
         config.average_value_weight * float(metrics["average_case_value"])
         + config.goal_rate_weight * float(metrics.get("goal_rate", 0.0))
-        + config.robustness_weight * float(metrics["robustness_score"])
-        - config.exploitability_weight * float(metrics["exploitability_proxy"])
+        + config.robustness_weight * robustness
+        - config.exploitability_weight * exploit
     )
 
 
@@ -360,7 +382,7 @@ def resolved_executor_action_source(config: TrainingConfig) -> str:
     source = config.executor_action_source
     if source == "aligned":
         return config.evaluator_action_source
-    if source not in {"policy", "heuristic"}:
+    if source not in {"policy", "heuristic", "parametric"}:
         raise ValueError(f"Unknown executor_action_source: {source}")
     return source
 
@@ -388,13 +410,16 @@ def collect_policy_rollout(
         if executor_source == "heuristic":
             action = attacker_heuristic_action(env, strategy, label=selected_label)
             action_tensor = torch.tensor([action], dtype=torch.long, device=device)
+        elif executor_source == "parametric":
+            action = parametric_attacker_action(env, strategy)
+            action_tensor = torch.tensor([action], dtype=torch.long, device=device)
         else:
             action_tensor = distribution.sample()
             action = int(action_tensor.item())
 
-        phi_before = gridworld_potential(env)
+        phi_before = gridworld_v2_potential(env) if is_v2_env(env) else gridworld_potential(env)
         result = env.step(action)
-        phi_after = gridworld_potential(env)
+        phi_after = gridworld_v2_potential(env) if is_v2_env(env) else gridworld_potential(env)
         training_reward = float(result.reward) + config.shaping_coef * (config.gamma * phi_after - phi_before)
         next_state = torch.as_tensor(result.observation, dtype=torch.float32, device=device)
 
@@ -443,12 +468,15 @@ def heuristic_action_from_state(
     state: Tensor,
     strategy: Tensor,
     label: str | None,
-    env_config: GridworldConfig,
+    env_config: GridworldConfig | GridworldV2Config,
 ) -> int:
     """Reconstruct a minimal env from an observation and query the heuristic policy."""
 
+    env = make_gridworld(env_config)
+    if is_v2_env(env):
+        env.set_state_from_observation(state.detach().cpu().numpy())
+        return attacker_heuristic_action(env, strategy, label=label)
     scale = max(1, env_config.grid_size - 1)
-    env = AttackerDefenderGridworld(env_config)
     env.attacker_pos = (round(float(state[0]) * scale), round(float(state[1]) * scale))
     env.defender_pos = (round(float(state[2]) * scale), round(float(state[3]) * scale))
     env.goal_pos = (round(float(state[4]) * scale), round(float(state[5]) * scale))

@@ -90,6 +90,34 @@ def random_strategy_embeddings(
     return torch.randn(num_strategies, dim, generator=generator, device=device)
 
 
+def strategy_entropy(strategies: Tensor, k: int = 5, seed: int = 0) -> float:
+    """Entropy of a k-means assignment over strategy embeddings."""
+
+    if strategies.ndim != 2:
+        raise ValueError(f"strategies must have shape [batch, dim], got {tuple(strategies.shape)}")
+    n = int(strategies.shape[0])
+    if n < 2:
+        return 0.0
+    k = max(1, min(int(k), n))
+    data = strategies.detach().float().cpu()
+    generator = torch.Generator()
+    generator.manual_seed(seed)
+    perm = torch.randperm(n, generator=generator)
+    centers = data[perm[:k]].clone()
+    assignments = torch.zeros(n, dtype=torch.long)
+    for _ in range(8):
+        distances = torch.cdist(data, centers)
+        assignments = torch.argmin(distances, dim=1)
+        for cluster in range(k):
+            members = data[assignments == cluster]
+            if len(members) > 0:
+                centers[cluster] = members.mean(dim=0)
+    counts = torch.bincount(assignments, minlength=k).float()
+    probs = counts / counts.sum()
+    nz = probs[probs > 0]
+    return float(-(nz * torch.log(nz + 1e-12)).sum().item())
+
+
 def pairwise_diversity(strategies: Tensor) -> float:
     """Return mean pairwise Euclidean distance among strategy embeddings."""
 

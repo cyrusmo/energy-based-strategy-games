@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 import torch
 from torch import Tensor
 
-from strategy_games.strategies.embeddings import pairwise_diversity
+from strategy_games.strategies.embeddings import pairwise_diversity, strategy_entropy
 
 
 @dataclass(frozen=True)
@@ -102,3 +102,11 @@ class StrategyBuffer:
         if len(self._records) < 2:
             return 0.0
         return pairwise_diversity(torch.stack([record.embedding for record in self._records], dim=0))
+
+    def strategy_entropy(self, k: int = 5) -> float:
+        """Entropy of a k-means clustering over stored embeddings."""
+
+        if len(self._records) < 2:
+            return 0.0
+        stacked = torch.stack([record.embedding for record in self._records], dim=0)
+        return strategy_entropy(stacked, k=min(k, len(self._records)))

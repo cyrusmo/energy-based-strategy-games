@@ -25,6 +25,13 @@ from strategy_games.envs.gridworld import (
     greedy_action_towards,
     gridworld_potential,
 )
+from strategy_games.envs.gridworld_v2 import (
+    GridworldV2Config,
+    gridworld_v2_potential,
+    is_v2_env,
+    make_gridworld,
+)
+from strategy_games.envs.pathfinding import bfs_first_action, nearest_goal
 from strategy_games.models.policy import RandomPolicy
 from strategy_games.utils.config import load_config
 from strategy_games.utils.device import resolve_device
@@ -53,7 +60,7 @@ class PPOConfig:
     eval_episodes: int = 8
     eval_every_updates: int = 2
     device: str = "auto"
-    env: GridworldConfig = field(default_factory=GridworldConfig)
+    env: GridworldConfig | GridworldV2Config = field(default_factory=GridworldConfig)
 
 
 @dataclass
@@ -129,7 +136,7 @@ def run_random_policy_baseline(
     returns: list[float] = []
     outcomes: list[str] = []
     for _ in range(episodes):
-        env = AttackerDefenderGridworld(env_config)
+        env = make_gridworld(env_config)
         env.reset()
         done = False
         total = 0.0
@@ -153,13 +160,13 @@ def run_direct_goal_baseline(episodes: int = 5, env_config: GridworldConfig | No
     returns: list[float] = []
     outcomes: list[str] = []
     for _ in range(episodes):
-        env = AttackerDefenderGridworld(env_config)
+        env = make_gridworld(env_config)
         env.reset()
         done = False
         total = 0.0
         info: dict[str, object] = {"outcome": "running"}
         while not done:
-            action = greedy_action_towards(env.attacker_pos, env.goal_pos)
+            action = _direct_goal_action(env)
             result = env.step(action)
             total += result.reward
             done = result.done
@@ -177,7 +184,7 @@ def train_ppo_baseline(config: PPOConfig | None = None) -> dict[str, Any]:
     set_global_seed(config.seed)
     device = resolve_device(config.device, job="ppo_update")
 
-    env = AttackerDefenderGridworld(config.env)
+    env = make_gridworld(config.env)
     policy = ActorCriticPolicy(env.state_dim, env.action_dim, hidden_dim=config.hidden_dim).to(
         device=device, dtype=torch.float32
     )
@@ -311,9 +318,9 @@ def collect_ppo_rollout(
             action = distribution.sample()
             log_prob = distribution.log_prob(action).squeeze(0)
 
-        phi_before = gridworld_potential(env)
+        phi_before = _env_potential(env)
         result = env.step(int(action.item()))
-        phi_after = gridworld_potential(env)
+        phi_after = _env_potential(env)
         shaped_reward = float(result.reward) + config.shaping_coef * (config.gamma * phi_after - phi_before)
         shaped_reward *= config.reward_scale
         running_episode_return += float(result.reward)
@@ -480,7 +487,7 @@ def evaluate_ppo_policy(
     steps: list[int] = []
     device = next(policy.parameters()).device
     for _ in range(episodes):
-        env = AttackerDefenderGridworld(env_config)
+        env = make_gridworld(env_config)
         observation = env.reset()
         done = False
         total = 0.0
@@ -615,19 +622,23 @@ def _validate_ppo_config(config: PPOConfig) -> None:
         raise ValueError("shaping_coef must be non-negative")
 
 
-def _gridworld_config_from_mapping(raw: Mapping[str, Any]) -> GridworldConfig:
-    return GridworldConfig(
-        grid_size=int(raw.get("grid_size", 10)),
-        max_steps=int(raw.get("max_steps", 50)),
-        attacker_start=tuple(raw.get("attacker_start", [0, 0])),  # type: ignore[arg-type]
-        defender_start=tuple(raw.get("defender_start", [9, 9])),  # type: ignore[arg-type]
-        goal_pos=tuple(raw.get("goal_pos", [9, 0])),  # type: ignore[arg-type]
-        catch_radius=int(raw.get("catch_radius", 0)),
-        step_penalty=float(raw.get("step_penalty", -0.01)),
-        goal_reward=float(raw.get("goal_reward", 1.0)),
-        catch_reward=float(raw.get("catch_reward", -1.0)),
-        timeout_reward=float(raw.get("timeout_reward", -0.2)),
-    )
+def _gridworld_config_from_mapping(raw: Mapping[str, Any]) -> GridworldConfig | GridworldV2Config:
+    from strategy_games.envs.gridworld_v2 import env_config_from_mapping
+
+    return env_config_from_mapping(dict(raw))
+
+
+def _env_potential(env: Any) -> float:
+    if is_v2_env(env):
+        return gridworld_v2_potential(env)
+    return gridworld_potential(env)
+
+
+def _direct_goal_action(env: Any) -> int:
+    if is_v2_env(env):
+        target = nearest_goal(env.attacker_pos, env.goal_positions, env.config.grid_size, env.obstacles)
+        return bfs_first_action(env.attacker_pos, target, env.config.grid_size, env.obstacles)
+    return greedy_action_towards(env.attacker_pos, env.goal_pos)
 
 
 def _summarize(returns: list[float], outcomes: list[str], steps: list[int] | None = None) -> dict[str, float]:

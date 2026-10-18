@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from strategy_games.experiments.logging import ExperimentLogger
-from strategy_games.envs.gridworld import GridworldConfig
+from strategy_games.envs.gridworld_v2 import env_config_from_mapping
 from strategy_games.training.train_loop import TrainingConfig, run_training_loop
 from strategy_games.utils.config import load_config
 
@@ -15,14 +15,7 @@ def run_from_config(path: str | Path) -> dict[str, object]:
 
     raw = load_config(path)
     env_raw = raw.get("env", {})
-    env = GridworldConfig(
-        grid_size=int(env_raw.get("grid_size", 10)),
-        max_steps=int(env_raw.get("max_steps", 50)),
-        attacker_start=tuple(env_raw.get("attacker_start", [0, 0])),  # type: ignore[arg-type]
-        defender_start=tuple(env_raw.get("defender_start", [9, 9])),  # type: ignore[arg-type]
-        goal_pos=tuple(env_raw.get("goal_pos", [9, 0])),  # type: ignore[arg-type]
-        catch_radius=int(env_raw.get("catch_radius", 0)),
-    )
+    env = env_config_from_mapping(env_raw if isinstance(env_raw, dict) else {})
     training_raw = raw.get("training", {})
     ebm_raw = raw.get("ebm", {})
     evaluator_raw = raw.get("evaluator", {})
@@ -63,6 +56,9 @@ def run_from_config(path: str | Path) -> dict[str, object]:
         robustness_weight=float(selection_raw.get("robustness_weight", 0.5)),
         exploitability_weight=float(selection_raw.get("exploitability_weight", 0.5)),
         goal_rate_weight=float(selection_raw.get("goal_rate_weight", 1.0)),
+        robustness_alpha=float(selection_raw.get("robustness_alpha", evaluator_raw.get("robustness_alpha", 0.5))),
+        compute_exact=bool(evaluator_raw.get("compute_exact", False)),
+        use_robustness_g=bool(selection_raw.get("use_robustness_g", False)),
         use_buffer_positives=bool(updates_raw.get("use_buffer_positives", True)),
         train_policy=bool(updates_raw.get("train_policy", True)),
         train_ebm=bool(updates_raw.get("train_ebm", True)),
