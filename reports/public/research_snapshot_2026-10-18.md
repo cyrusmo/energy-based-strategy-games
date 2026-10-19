@@ -116,6 +116,20 @@ sampled-selection loop still picks a caught script.
 Sampler and world-model switches do not change return. Candidate count changes
 diversity, not scoring.
 
+## Learning study (5 seeds, PPO 4096, strategy 3 iterations)
+
+From `outputs/public/learning_study_v2/summary.json`:
+
+| Method | Return | Goal rate | Catch | Timeout | Selected |
+| --- | ---: | ---: | ---: | ---: | --- |
+| PPO | -0.40 | 0.00 | 0.00 | 1.00 | `ppo_policy` |
+| Strategy loop | -1.05 | 0.00 | 1.00 | 0.00 | `aggressive` 0.6 / `latent` 0.4 |
+
+PPO times out against the scripted greedy defender (`ppo_learning_weak`).
+The strategy loop is caught in five steps (`strategy_execution_weak`).
+Neither scores. Buffer diversity is 1.01 for the strategy loop (non-zero;
+the EBM is sampling).
+
 ## Framing decision
 
 Keep the paper diagnostic. The cycle's reportable result is not a transfer
