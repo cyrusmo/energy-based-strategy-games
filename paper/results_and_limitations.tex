@@ -4,7 +4,8 @@ Gridworld v2 is the paper testbed: walls, two goals, and layouts in which evasiv
 Exact exploitability is implemented in \texttt{evaluation/exact.py}.
 Gate 2 writes \texttt{outputs/public/gate2/summary.json} and sets the paper framing to positive only if the strategy loop has lower exact exploitability than PPO and diversity-only with separated 95\% CIs.
 The October 18 retune makes the train layout winnable ($V_{\mathrm{Nash}}=0.746$) while keeping \texttt{open\_bottom} at the timeout Nash value.
-The 2026-10-18 five-seed rerun failed that gate (\texttt{passed: false}): PPO $1.606$, strategy loop $1.740$ $[1.696,1.784]$, diversity-only $1.797$.
+The 2026-10-18 five-seed rerun failed that gate on deterministic attackers.
+The 2026-10-19 mixed-strategy rerun also fails (\texttt{passed: false}, \texttt{beats\_diversity\_only: true}): EBM mixture $1.573$ $[1.478,1.668]$, softmax PPO $1.598$, diversity-only $1.762$, Nash oracle $0.000$.
 Keep the abstract's diagnostic language.
 
 \section{Diagnostic Results Draft}

@@ -18,7 +18,7 @@
 We present an early research system for separating high-level strategy generation from low-level action execution in adversarial multi-agent environments.
 The system combines an energy-based model over latent strategy embeddings, approximate sampled-response evaluation, a strategy-conditioned policy, and lightweight update hooks for policy learning, contrastive energy learning, and one-step world-model fitting.
 The current contribution is a complete methods scaffold on a redesigned gridworld: continuous energy-based strategy generation, exact finite-horizon Nash/best-response evaluation, and conference baselines (PPO, diversity-only, PSRO-lite).
-Gate 1 is passed (non-degenerate strategic trade-offs). Gate 2 fails: the strategy loop's exact exploitability CI does not lie below PPO or diversity-only, so we report the system as methodological and diagnostic rather than as a positive transfer result.
+Gate 1 is passed (non-degenerate strategic trade-offs). Gate 2 evaluates each method as a Markov behavioral mixture; it fails because the EBM mixture's exploitability CI does not lie below PPO, so we report the system as methodological and diagnostic. The Nash-oracle row has exploitability $0$, so the gap is closable.
 \end{abstract}
 
 \section{Introduction}
@@ -130,11 +130,11 @@ Table~\ref{tab:exact-nash} reports exact Nash values and scripted-strategy explo
 The train map is winnable ($V_{\mathrm{Nash}}=0.746 > -0.400$), and \texttt{open\_bottom} is an equal-speed held-out map whose Nash value equals timeout ($-0.400$).
 Every named heuristic has exploitability $0.70$--$2.08$ because an exact best-response defender catches a committed script.
 
-Gate 2 compares the full method to PPO (4096 steps), diversity-only sampling, and PSRO-lite on exact exploitability over five seeds (Table~\ref{tab:gate2}).
-\texttt{outputs/public/gate2/summary.json} reports \texttt{passed: false} and \texttt{framing: diagnostic}.
-PPO has the lowest exact exploitability ($1.606$); the strategy loop is $1.740$ $[1.696,1.784]$ and does not separate from PPO or diversity-only.
-Every method remains far from Nash: value versus an exact best-response defender is about $-1.1$ to $-1.2$ while $V_{\mathrm{Nash}}=0.746$ on the train map.
-The honest finding is that robustness-aware selection on a now-winnable game still converges to highly exploitable committed scripts (usually \texttt{aggressive}), not to a low-exploitability attacker.
+Gate 2 compares mixed attackers on exact exploitability over five seeds (Table~\ref{tab:gate2}).
+\texttt{outputs/public/gate2/summary.json} reports \texttt{passed: false}, \texttt{beats\_diversity\_only: true}, and \texttt{framing: diagnostic}.
+The EBM mixture is $1.573$ $[1.478,1.668]$: it separates from diversity-only ($1.762$) but not from softmax PPO ($1.598$).
+The Nash-oracle row has exploitability $0$ and held-out goal rate $0.96$, so a low-exploitability mixed attacker exists on this game.
+The honest finding is that mass on low-energy latents does not yet concentrate on a low-exploitability mixture.
 
 \begin{table}[t]
 \centering
@@ -156,16 +156,21 @@ Layout & $V_{\mathrm{Nash}}$ & Timeout & aggressive & evasive & feint & patient 
 
 \begin{table}[t]
 \centering
-\caption{Gate 2 five-seed exact exploitability (lower is better). CIs are 95\%.}
+\caption{Gate 2 five-seed exact exploitability of mixed attackers (lower is better). CIs are 95\%. Nash and uniform-random are reference rows.}
 \label{tab:gate2}
-\begin{tabular}{lrrrr}
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{llrrrr}
 \toprule
-Method & Exploitability & Value vs BR & Held-out goal & Env.\ steps \\
+Method & Kind & Exploitability & Value vs BR & Held-out goal & Support \\
 \midrule
-PPO & $1.606$ $[1.606,1.606]$ & $-1.190$ & $0.333$ & $4096$ \\
-Strategy loop & $1.740$ $[1.696,1.784]$ & $-1.134$ & $0.053$ & $10435$ \\
-Diversity-only & $1.797$ $[1.772,1.822]$ & $-1.192$ & $0.373$ & $10708$ \\
-PSRO-lite & $1.811$ $[1.811,1.811]$ & $-1.200$ & $0.333$ & $1000$ \\
+Nash oracle & ref. & $0.000$ & $0.746$ & $0.960$ & $1.0$ \\
+EBM mixture & primary & $1.573$ $[1.478,1.668]$ & $-1.027$ & $0.128$ & $15.9$ \\
+PPO softmax & baseline & $1.598$ $[1.567,1.630]$ & $-1.127$ & $0.000$ & $1.0$ \\
+PPO $\arg\max$ & continuity & $1.606$ & $-1.190$ & $0.000$ & $1.0$ \\
+Uniform random & ref. & $1.633$ & $-1.069$ & $0.000$ & $5.0$ \\
+Buffer mixture & secondary & $1.726$ $[1.724,1.727]$ & $-1.122$ & $0.267$ & $7.8$ \\
+Diversity-only & baseline & $1.762$ $[1.692,1.832]$ & $-1.128$ & $0.357$ & $7.1$ \\
+PSRO-lite & baseline & $1.811$ & $-1.200$ & $0.200$ & $1.0$ \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -176,7 +181,8 @@ Figures regenerated from the same artifacts: the v2 payoff heatmap, Gate 2 explo
 
 Exact exploitability is available on Gridworld v2 but expensive (about $1$--$6$\,s per candidate best response); the paper training config uses it for selection, while the ablation config keeps sampled $G$.
 The learned world model is not yet the best-response engine.
-Multi-evader pursuit, $n$-player CCE, and a proof of the energy-mass-on-equilibria conjecture are left to future work.
+PPO still times out against the scripted defender on v2, so the softmax baseline is a credible mixture but not a strong learner.
+A draw-once-per-episode mixture, self-play, and multi-evader pursuit are left to future work.
 
 \section{Reproducibility}
 
