@@ -83,3 +83,53 @@ def test_policy_from_actor_critic_returns_valid_action() -> None:
     attacker = policy_from_actor_critic(policy)
     action = attacker(_StateView(config, config.attacker_start, config.defender_start, 0))
     assert action in {0, 1, 2, 3, 4}
+
+
+def test_nash_oracle_exploitability_is_near_zero() -> None:
+    from strategy_games.evaluation.exact import exact_metrics_for_policy, nash_attacker_table
+
+    config = _tiny_config()
+    metrics = exact_metrics_for_policy(config, table=nash_attacker_table(config))
+    assert abs(metrics["exploitability"]) < 1e-6
+
+
+def test_uniform_random_exploitability_is_finite() -> None:
+    from strategy_games.evaluation.exact import exact_metrics_for_policy, uniform_random_table
+
+    config = _tiny_config()
+    metrics = exact_metrics_for_policy(config, table=uniform_random_table(config))
+    assert np.isfinite(metrics["exploitability"])
+    assert metrics["exploitability"] >= -1e-6
+
+
+def test_mixture_table_rows_sum_to_one() -> None:
+    from strategy_games.evaluation.exact import (
+        action_probs_table,
+        exact_metrics_for_policy,
+        mixture_table,
+        policy_from_strategy,
+        uniform_random_table,
+    )
+
+    config = _tiny_config()
+    strategy = named_strategy_embedding("direct_goal", 8).vector
+    first = action_probs_table(config, policy_from_strategy(strategy, label="direct_goal"))
+    second = uniform_random_table(config)
+    mixed = mixture_table([first, second], [0.7, 0.3])
+    sums = mixed.sum(axis=-1)
+    assert np.allclose(sums, 1.0)
+    metrics = exact_metrics_for_policy(config, table=mixed)
+    assert np.isfinite(metrics["exploitability"])
+
+
+def test_stochastic_policy_from_actor_critic_is_a_distribution() -> None:
+    from strategy_games.evaluation.exact import _StateView, stochastic_policy_from_actor_critic
+    from strategy_games.training.ppo_baseline import ActorCriticPolicy
+
+    config = _tiny_config()
+    policy = ActorCriticPolicy(state_dim=11, action_dim=5, hidden_dim=8)
+    attacker = stochastic_policy_from_actor_critic(policy)
+    probs = attacker(_StateView(config, config.attacker_start, config.defender_start, 0))
+    assert probs.shape == (5,)
+    assert abs(float(np.sum(probs)) - 1.0) < 1e-6
+    assert np.all(probs >= 0.0)

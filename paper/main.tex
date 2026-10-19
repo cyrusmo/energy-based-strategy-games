@@ -94,6 +94,15 @@ Training-time selection may use sampled opponents.
 Reported exploitability uses dynamic programming: a minimizing defender against a fixed attacker policy, and a per-state $5\times 5$ Nash LP for the game value.
 The world model is an efficiency component and is not the source of reported best responses.
 
+\subsection{Mixed-strategy evaluation}
+
+The energy model defines a distribution over latents, not a single script.
+Gate 2 therefore evaluates each method as a per-state mixed attacker: an action-probability table $\pi(a\mid s)$ is built for every joint state, and exploitability is $V_{\mathrm{Nash}}-V(\pi,\mathrm{BR}(\pi))$.
+A $K$-component mixture is the Markov behavioral mix $\sum_k w_k\pi_k$ (independent mixing at each state).
+A draw-once-per-episode mixture would require a belief-state DP; we do not compute that quantity.
+The Nash attacker table is the row mix already solved by the per-state LP, and has exploitability $0$ by construction.
+PPO is reported as a softmax mixture; the $\arg\max$ policy is kept as a continuity row.
+
 \section{Experimental Setup}
 
 \subsection{Primary Environment}

@@ -58,8 +58,9 @@ def main() -> None:
     draw_v2_payoff_heatmap(Path("outputs/public/payoff_matrix_v2/matrix.json"), args.output_dir / "payoff_matrix_v2.png", compute=not args.no_compute)
     draw_gate2_summary(Path("outputs/public/gate2/summary.json"), args.output_dir / "gate2_summary.png")
     draw_exploitability_vs_steps(
-        Path("outputs/public/gate2/rows.json"),
+        Path("outputs/public/gate2/curves.json"),
         args.output_dir / "exploitability_vs_steps.png",
+        summary_path=Path("outputs/public/gate2/summary.json"),
     )
     write_manifest(
         args.output_dir,
@@ -292,11 +293,16 @@ def draw_gate2_summary(json_path: Path, figure_path: Path) -> None:
     payload = load_json(json_path)
     if not isinstance(payload, dict) or not isinstance(payload.get("methods"), list):
         return
-    names = [str(row["method"]) for row in payload["methods"]]
-    key = "exploitability" if "exploitability" in payload["methods"][0] else "heldout_goal_rate"
-    means = [float(row[key]["mean"]) for row in payload["methods"]]
-    fig, ax = plt.subplots(figsize=(7, 4))
-    ax.bar(names, means)
+    methods = payload["methods"]
+    names = [str(row["method"]) for row in methods]
+    key = "exploitability" if "exploitability" in methods[0] else "heldout_goal_rate"
+    means = [float(row[key]["mean"]) for row in methods]
+    hatches = ["///" if bool(row.get("reference")) else None for row in methods]
+    fig, ax = plt.subplots(figsize=(8, 4))
+    bars = ax.bar(names, means)
+    for bar, hatch in zip(bars, hatches):
+        if hatch:
+            bar.set_hatch(hatch)
     ax.set_ylabel("Exact exploitability" if key == "exploitability" else "Held-out goal rate")
     ax.set_title(f"Gate 2 ({payload.get('framing', 'unknown')} framing)")
     ax.tick_params(axis="x", labelrotation=25)
@@ -304,8 +310,12 @@ def draw_gate2_summary(json_path: Path, figure_path: Path) -> None:
     save_figure(fig, figure_path)
 
 
-def draw_exploitability_vs_steps(json_path: Path, figure_path: Path) -> None:
-    """Draw exact exploitability against environment steps from Gate 2 rows."""
+def draw_exploitability_vs_steps(
+    json_path: Path,
+    figure_path: Path,
+    summary_path: Path | None = None,
+) -> None:
+    """Draw mean/CI exploitability curves versus environment steps."""
 
     payload = load_json(json_path)
     if not isinstance(payload, list) or not payload:
@@ -313,11 +323,26 @@ def draw_exploitability_vs_steps(json_path: Path, figure_path: Path) -> None:
     fig, ax = plt.subplots(figsize=(7, 4))
     methods = sorted({str(row["method"]) for row in payload if isinstance(row, dict)})
     for method in methods:
-        xs = [float(row.get("env_steps", 0.0)) for row in payload if row.get("method") == method]
-        ys = [float(row.get("exploitability", 0.0)) for row in payload if row.get("method") == method]
-        if not xs:
+        rows = [row for row in payload if row.get("method") == method]
+        by_x: dict[float, list[float]] = {}
+        for row in rows:
+            by_x.setdefault(float(row.get("env_steps", 0.0)), []).append(float(row.get("exploitability", 0.0)))
+        if not by_x:
             continue
-        ax.scatter(xs, ys, label=method)
+        xs = sorted(by_x)
+        means = [float(np.mean(by_x[x])) for x in xs]
+        lows = [float(np.min(by_x[x])) for x in xs]
+        highs = [float(np.max(by_x[x])) for x in xs]
+        ax.plot(xs, means, marker="o", label=method)
+        ax.fill_between(xs, lows, highs, alpha=0.15)
+    if summary_path is not None:
+        summary = load_json(summary_path)
+        if isinstance(summary, dict):
+            for row in summary.get("methods", []):
+                if str(row.get("method")) == "nash_oracle":
+                    ax.axhline(float(row["exploitability"]["mean"]), linestyle="--", label="nash_oracle")
+                if str(row.get("method")) == "uniform_random":
+                    ax.axhline(float(row["exploitability"]["mean"]), linestyle=":", label="uniform_random")
     ax.set_xlabel("Environment steps")
     ax.set_ylabel("Exact exploitability")
     ax.set_title("Gate 2 sample efficiency")

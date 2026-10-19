@@ -108,38 +108,136 @@ def solve_matrix_nash(payoff: np.ndarray) -> tuple[float, np.ndarray, np.ndarray
 def nash_value(config: GridworldV2Config) -> float:
     """Attacker Nash value from the initial state, cached per config."""
 
-    table = _nash_table(config)
+    values, _ = _nash_solution(config)
     cells = _free_cells(config)
     index = {cell: i for i, cell in enumerate(cells)}
-    return float(table[0, index[config.attacker_start], index[config.defender_start]])
+    return float(values[0, index[config.attacker_start], index[config.defender_start]])
 
 
-def _nash_table(config: GridworldV2Config) -> np.ndarray:
+@lru_cache(maxsize=8)
+def _nash_solution(config: GridworldV2Config) -> tuple[np.ndarray, np.ndarray]:
+    """Return (values, row_mixes) of the finite-horizon Nash DP."""
+
     cells = _free_cells(config)
     n = len(cells)
     actions = tuple(ACTION_TO_DELTA)
+    n_actions = len(actions)
     horizon = config.max_steps
     values = np.zeros((horizon + 1, n, n), dtype=np.float64)
+    mixes = np.zeros((horizon + 1, n, n, n_actions), dtype=np.float64)
+    mixes[..., :] = 1.0 / n_actions
     for t in range(horizon, -1, -1):
         for ia, att in enumerate(cells):
             for id_, deff in enumerate(cells):
                 reward, done = resolve_v2_outcome(att, deff, t, config)[:2]
                 if t > 0 and done:
-                    # States after a terminal transition are not queried; keep 0.
                     values[t, ia, id_] = 0.0
                     continue
                 if t == horizon:
                     values[t, ia, id_] = float(reward) if done else float(config.timeout_reward + config.step_penalty)
                     continue
-                if t == 0:
-                    # Initial state is not yet terminal unless spawn is illegal.
-                    pass
-                payoff = np.zeros((len(actions), len(actions)), dtype=np.float64)
+                payoff = np.zeros((n_actions, n_actions), dtype=np.float64)
                 for ai, a_act in enumerate(actions):
                     for di, d_act in enumerate(actions):
                         payoff[ai, di] = _transition_value(att, deff, t, a_act, d_act, config, cells, values)
-                values[t, ia, id_], _, _ = solve_matrix_nash(payoff)
-    return values
+                value, row, _ = solve_matrix_nash(payoff)
+                values[t, ia, id_] = float(value)
+                mixes[t, ia, id_] = row
+    return values, mixes
+
+
+def nash_attacker_table(config: GridworldV2Config) -> np.ndarray:
+    """Per-state Nash row mix. Exploitability of this table is about 0."""
+
+    _, mixes = _nash_solution(config)
+    return mixes
+
+
+def uniform_random_table(config: GridworldV2Config) -> np.ndarray:
+    """Uniform 1/5 action mix at every joint state."""
+
+    cells = _free_cells(config)
+    n = len(cells)
+    n_actions = len(ACTION_TO_DELTA)
+    table = np.full((config.max_steps + 1, n, n, n_actions), 1.0 / n_actions, dtype=np.float64)
+    return table
+
+
+def action_probs_table(config: GridworldV2Config, attacker_policy: AttackerPolicy) -> np.ndarray:
+    """Evaluate a policy once per joint state.
+
+    Deterministic policies become one-hot rows; stochastic policies keep their
+    probability vectors. Shape is ``[T+1, n_cells, n_cells, n_actions]``.
+    """
+
+    cells = _free_cells(config)
+    n = len(cells)
+    actions = tuple(ACTION_TO_DELTA)
+    table = np.zeros((config.max_steps + 1, n, n, len(actions)), dtype=np.float64)
+    for t in range(config.max_steps + 1):
+        for ia, att in enumerate(cells):
+            for id_, deff in enumerate(cells):
+                view = _StateView(config, att, deff, t)
+                table[t, ia, id_] = _attacker_action_probs(attacker_policy, view, actions)
+    return table
+
+
+def mixture_table(tables: list[np.ndarray], weights: np.ndarray | list[float]) -> np.ndarray:
+    """Weighted sum of component tables.
+
+    This is a Markov behavioral mixture: at each state the attacker mixes
+    independently. A draw-once-per-episode mixture would need a belief-state DP.
+    """
+
+    if not tables:
+        raise ValueError("tables must be non-empty")
+    probs = np.asarray(weights, dtype=np.float64).reshape(-1)
+    if probs.size != len(tables):
+        raise ValueError("weights must match the number of tables")
+    probs = np.clip(probs, 0.0, None)
+    if float(probs.sum()) <= 0.0:
+        probs = np.ones(len(tables), dtype=np.float64) / len(tables)
+    else:
+        probs = probs / probs.sum()
+    mixed = np.zeros_like(tables[0], dtype=np.float64)
+    for weight, table in zip(probs, tables):
+        mixed += float(weight) * np.asarray(table, dtype=np.float64)
+    totals = mixed.sum(axis=-1, keepdims=True)
+    totals = np.where(totals <= 0.0, 1.0, totals)
+    return mixed / totals
+
+
+def best_response_value_from_table(config: GridworldV2Config, table: np.ndarray) -> float:
+    """Attacker value against an exact minimizing defender, given a mix table."""
+
+    cells = _free_cells(config)
+    index = {cell: i for i, cell in enumerate(cells)}
+    n = len(cells)
+    horizon = config.max_steps
+    actions = tuple(ACTION_TO_DELTA)
+    if table.shape != (horizon + 1, n, n, len(actions)):
+        raise ValueError(f"table shape {table.shape} does not match config")
+    values = np.zeros((horizon + 1, n, n), dtype=np.float64)
+    for t in range(horizon, -1, -1):
+        for ia, att in enumerate(cells):
+            for id_, deff in enumerate(cells):
+                if t == horizon:
+                    reward, done = resolve_v2_outcome(att, deff, t, config)[:2]
+                    values[t, ia, id_] = float(reward) if done else float(config.timeout_reward + config.step_penalty)
+                    continue
+                action_probs = table[t, ia, id_]
+                best = float("inf")
+                for d_act in actions:
+                    val = 0.0
+                    for ai, a_act in enumerate(actions):
+                        weight = float(action_probs[ai])
+                        if weight <= 0.0:
+                            continue
+                        val += weight * _transition_value(att, deff, t, a_act, d_act, config, cells, values)
+                    if val < best:
+                        best = val
+                values[t, ia, id_] = float(best)
+    return float(values[0, index[config.attacker_start], index[config.defender_start]])
 
 
 def _transition_value(
@@ -195,33 +293,7 @@ def best_response_value(config: GridworldV2Config, attacker_policy: AttackerPoli
     probabilities. Mixtures (PSRO meta-Nash) use the latter.
     """
 
-    cells = _free_cells(config)
-    index = {cell: i for i, cell in enumerate(cells)}
-    n = len(cells)
-    horizon = config.max_steps
-    values = np.zeros((horizon + 1, n, n), dtype=np.float64)
-    actions = tuple(ACTION_TO_DELTA)
-    for t in range(horizon, -1, -1):
-        for ia, att in enumerate(cells):
-            for id_, deff in enumerate(cells):
-                if t == horizon:
-                    reward, done = resolve_v2_outcome(att, deff, t, config)[:2]
-                    values[t, ia, id_] = float(reward) if done else float(config.timeout_reward + config.step_penalty)
-                    continue
-                view = _StateView(config, att, deff, t)
-                action_probs = _attacker_action_probs(attacker_policy, view, actions)
-                best = float("inf")
-                for d_act in actions:
-                    val = 0.0
-                    for ai, a_act in enumerate(actions):
-                        weight = float(action_probs[ai])
-                        if weight <= 0.0:
-                            continue
-                        val += weight * _transition_value(att, deff, t, a_act, d_act, config, cells, values)
-                    if val < best:
-                        best = val
-                values[t, ia, id_] = float(best)
-    return float(values[0, index[config.attacker_start], index[config.defender_start]])
+    return best_response_value_from_table(config, action_probs_table(config, attacker_policy))
 
 
 def exact_exploitability(config: GridworldV2Config, attacker_policy: AttackerPolicy) -> float:
@@ -230,21 +302,42 @@ def exact_exploitability(config: GridworldV2Config, attacker_policy: AttackerPol
     return float(nash_value(config) - best_response_value(config, attacker_policy))
 
 
+def _actor_critic_state(policy: Any, view: Any):
+    import torch
+
+    from strategy_games.envs.gridworld_v2 import AttackerDefenderGridworldV2
+
+    env = AttackerDefenderGridworldV2(view.config)
+    env.attacker_pos = view.attacker_pos
+    env.defender_pos = view.defender_pos
+    env.steps = view.steps
+    device = next(policy.parameters()).device
+    state = torch.as_tensor(env.observe(), dtype=torch.float32, device=device)
+    return state, device
+
+
 def policy_from_actor_critic(policy: Any) -> AttackerPolicy:
-    """Adapt a PPO ``ActorCriticPolicy`` to the exact-evaluation attacker API."""
+    """Adapt a PPO ``ActorCriticPolicy`` to a deterministic (argmax) attacker."""
 
     def _act(view: Any) -> int:
+        state, _device = _actor_critic_state(policy, view)
+        return int(policy.act(state, deterministic=True))
+
+    return _act
+
+
+def stochastic_policy_from_actor_critic(policy: Any) -> AttackerPolicy:
+    """Adapt a PPO ``ActorCriticPolicy`` to a softmax action mixture."""
+
+    def _act(view: Any) -> np.ndarray:
         import torch
 
-        from strategy_games.envs.gridworld_v2 import AttackerDefenderGridworldV2
-
-        env = AttackerDefenderGridworldV2(view.config)
-        env.attacker_pos = view.attacker_pos
-        env.defender_pos = view.defender_pos
-        env.steps = view.steps
-        device = next(policy.parameters()).device
-        state = torch.as_tensor(env.observe(), dtype=torch.float32, device=device)
-        return int(policy.act(state, deterministic=True))
+        state, _device = _actor_critic_state(policy, view)
+        if state.ndim == 1:
+            state = state.unsqueeze(0)
+        logits, _ = policy(state)
+        probs = torch.softmax(logits, dim=-1).detach().cpu().numpy().reshape(-1)
+        return probs
 
     return _act
 
@@ -294,10 +387,18 @@ def policy_from_strategy(strategy: Any, label: str | None = None, policy: Any | 
     return _act
 
 
-def exact_metrics_for_policy(config: GridworldV2Config, attacker_policy: AttackerPolicy) -> dict[str, float]:
-    """Return exact Nash value, BR value, and exploitability for a policy."""
+def exact_metrics_for_policy(
+    config: GridworldV2Config,
+    attacker_policy: AttackerPolicy | None = None,
+    table: np.ndarray | None = None,
+) -> dict[str, float]:
+    """Return exact Nash value, BR value, and exploitability for a policy or table."""
 
-    value_vs_br = best_response_value(config, attacker_policy)
+    if table is None:
+        if attacker_policy is None:
+            raise ValueError("exact_metrics_for_policy requires attacker_policy or table")
+        table = action_probs_table(config, attacker_policy)
+    value_vs_br = best_response_value_from_table(config, table)
     game_value = nash_value(config)
     return {
         "exact_value_vs_br": float(value_vs_br),
@@ -323,3 +424,4 @@ def clear_exact_caches() -> None:
     """Drop cached Nash tables. Useful in tests that construct many configs."""
 
     nash_value.cache_clear()
+    _nash_solution.cache_clear()

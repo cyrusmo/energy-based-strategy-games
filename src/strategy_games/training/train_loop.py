@@ -270,6 +270,16 @@ def run_training_loop(config: TrainingConfig | None = None) -> dict[str, object]
         "final_selected_label": history[-1]["selected_label"] if history else None,
         "env_steps": int(env_steps),
         "device": str(device),
+        "_ebm": ebm,
+        "_buffer_records": [
+            {
+                "embedding": record.embedding.detach().cpu(),
+                "label": record.label,
+                "score": record.score(),
+                "iteration": int(record.iteration),
+            }
+            for record in buffer.records()
+        ],
     }
 
 

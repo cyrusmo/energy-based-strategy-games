@@ -61,7 +61,7 @@ class ExperimentLogger:
     def write_metrics(self, result: Mapping[str, Any]) -> Path:
         """Write aggregate metrics for a completed run."""
 
-        metrics = summarize_training_result(result)
+        metrics = summarize_training_result(_public_mapping(result))
         with self.metrics_path.open("w", encoding="utf-8") as handle:
             json.dump(to_jsonable(metrics), handle, indent=2, sort_keys=True)
             handle.write("\n")
@@ -70,12 +70,13 @@ class ExperimentLogger:
     def log_run(self, config: Mapping[str, Any], result: Mapping[str, Any]) -> dict[str, str]:
         """Write config, iteration JSONL, and final metrics."""
 
-        history = result.get("history", [])
+        public = _public_mapping(result)
+        history = public.get("history", [])
         if not isinstance(history, list):
             raise ValueError("result['history'] must be a list")
         self.save_config(config)
         self.write_iterations(history)
-        self.write_metrics(result)
+        self.write_metrics(public)
         return {
             "run_dir": str(self.run_dir),
             "iterations_jsonl": str(self.iterations_path),
@@ -84,9 +85,16 @@ class ExperimentLogger:
         }
 
 
+def _public_mapping(result: Mapping[str, Any]) -> dict[str, Any]:
+    """Drop non-serialized keys so modules and tensors never reach JSON."""
+
+    return {str(key): value for key, value in result.items() if not str(key).startswith("_")}
+
+
 def summarize_training_result(result: Mapping[str, Any]) -> dict[str, Any]:
     """Compute aggregate metrics from a training-loop result."""
 
+    result = _public_mapping(result)
     history = result.get("history", [])
     if not isinstance(history, list):
         raise ValueError("result['history'] must be a list")
@@ -116,7 +124,7 @@ def to_jsonable(value: Any) -> Any:
     """Recursively convert common scientific Python values to JSON-safe values."""
 
     if isinstance(value, dict):
-        return {str(key): to_jsonable(item) for key, item in value.items()}
+        return {str(key): to_jsonable(item) for key, item in value.items() if not str(key).startswith("_")}
     if isinstance(value, list | tuple):
         return [to_jsonable(item) for item in value]
     if isinstance(value, Path):
