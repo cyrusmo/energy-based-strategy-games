@@ -45,6 +45,7 @@ def main() -> None:
         type=Path,
         default=Path("outputs/public/learning_study/triage_table.csv"),
     )
+    parser.add_argument("--gate2-dir", type=Path, default=Path("outputs/public/gate2_v4"))
     parser.add_argument("--no-compute", action="store_true", help="Use existing JSON only; do not run experiments.")
     args = parser.parse_args()
 
@@ -56,11 +57,13 @@ def main() -> None:
     draw_ablation_summary(args.ablation_json, args.output_dir / "ablation_summary.png", compute=not args.no_compute)
     draw_learning_study_summary(args.learning_json, args.output_dir / "learning_study_summary.png", compute=not args.no_compute)
     draw_v2_payoff_heatmap(Path("outputs/public/payoff_matrix_v2/matrix.json"), args.output_dir / "payoff_matrix_v2.png", compute=not args.no_compute)
-    draw_gate2_summary(Path("outputs/public/gate2/summary.json"), args.output_dir / "gate2_summary.png")
+    gate2_summary = args.gate2_dir / "summary.json"
+    gate2_curves = args.gate2_dir / "curves.json"
+    draw_gate2_summary(gate2_summary, args.output_dir / "gate2_summary.png")
     draw_exploitability_vs_steps(
-        Path("outputs/public/gate2/curves.json"),
+        gate2_curves,
         args.output_dir / "exploitability_vs_steps.png",
-        summary_path=Path("outputs/public/gate2/summary.json"),
+        summary_path=gate2_summary,
     )
     write_manifest(
         args.output_dir,
@@ -70,6 +73,8 @@ def main() -> None:
             args.ablation_json,
             args.learning_json,
             args.learning_triage_csv,
+            gate2_summary,
+            gate2_curves,
         ],
         command=["python", "scripts/make_paper_figures.py", *sys.argv[1:]],
         is_smoke=args.no_compute,

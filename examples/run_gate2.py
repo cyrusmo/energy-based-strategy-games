@@ -13,7 +13,7 @@ def main() -> None:
     parser.add_argument("--seeds", type=int, nargs="+", default=[0, 1, 2, 3, 4])
     parser.add_argument("--strategy-iterations", type=int, default=8)
     parser.add_argument("--ppo-total-steps", type=int, default=4096)
-    parser.add_argument("--output-dir", type=Path, default=Path("outputs/public/gate2"))
+    parser.add_argument("--output-dir", type=Path, default=Gate2Config.output_dir)
     args = parser.parse_args()
     result = run_gate2(
         Gate2Config(
@@ -28,11 +28,13 @@ def main() -> None:
     print(f"passed={summary['passed']} beats_ppo={summary['beats_ppo']} beats_diversity={summary['beats_diversity_only']}")
     for method in summary["methods"]:
         exploit = method["exploitability"]
-        held = method["heldout_goal_rate"]
+        table_goal = method["heldout_table_goal_rate"]
+        draw_once_goal = method.get("heldout_draw_once_goal_rate")
+        diagnostic = f" heldout_draw_once_goal={draw_once_goal['mean']:.3f}" if draw_once_goal else ""
         print(
             f"  {method['method']}: exploitability={exploit['mean']:.3f} "
             f"[{exploit['ci_low']:.3f}, {exploit['ci_high']:.3f}] "
-            f"heldout_goal={held['mean']:.3f}"
+            f"heldout_table_goal={table_goal['mean']:.3f}{diagnostic}"
         )
 
 

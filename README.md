@@ -126,7 +126,7 @@ Generated outputs under `outputs/public/` are ignored by default. Curated artifa
 
 ## Current Status
 
-The paper testbed is Gridworld v2 (walls, two goals, exact Nash/BR). v1 is kept for snapshot reproduction. Gate 1 (non-degenerate payoff, unique-best layouts) is unit-tested. Gate 2 currently selects **diagnostic** framing: the EBM loop does not yet beat PPO and diversity-only on held-out v2 goal rate with separated 5-seed CIs (`outputs/public/gate2/summary.json`). Exact exploitability, PSRO-lite, and a parametric continuous controller are implemented. The world model is still not the BR engine.
+The paper testbed is Gridworld v2 (walls, two goals, exact Nash/BR). v1 is kept for snapshot reproduction. Gate 1 (non-degenerate payoff, unique-best layouts) is unit-tested. The October 19 Gate 2 result is **diagnostic**. On exact exploitability, the EBM mixture separated from diversity-only and its five-seed confidence interval overlapped PPO's. Corrected runs write to `outputs/public/gate2_v4/` and report a separate held-out table-policy goal rate against scripted defenders. Exact exploitability, PSRO-lite, and a parametric continuous controller are implemented. The world model is still not the BR engine.
 
 ## Research Roadmap
 

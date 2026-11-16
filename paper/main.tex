@@ -99,7 +99,9 @@ The world model is an efficiency component and is not the source of reported bes
 The energy model defines a distribution over latents, not a single script.
 Gate 2 therefore evaluates each method as a per-state mixed attacker: an action-probability table $\pi(a\mid s)$ is built for every joint state, and exploitability is $V_{\mathrm{Nash}}-V(\pi,\mathrm{BR}(\pi))$.
 A $K$-component mixture is the Markov behavioral mix $\sum_k w_k\pi_k$ (independent mixing at each state).
-A draw-once-per-episode mixture would require a belief-state DP; we do not compute that quantity.
+Exact best-response evaluation of a draw-once-per-episode policy would require a belief-state DP.
+The corrected scripted-opponent protocol samples the same held-out action table used for exact exploitability, with one seeded rollout per scripted defender per layout. It reports the fraction of rollouts reaching a goal, averaged across held-out layouts.
+A separate draw-once diagnostic holds each sampled component fixed throughout its scripted-opponent rollouts.
 The Nash attacker table is the row mix already solved by the per-state LP, and has exploitability $0$ by construction.
 PPO is reported as a softmax mixture; the $\arg\max$ policy is kept as a continuity row.
 
@@ -123,7 +125,7 @@ The paper-facing ablation suite covers EBM versus Gaussian sampling, buffer posi
 
 \section{Results}
 
-All numerical claims are regenerated from \texttt{outputs/public/} by \texttt{scripts/reproduce\_paper\_results.sh}.
+Table~\ref{tab:gate2} reproduces the October 19, 2026 Gate 2 snapshot (schema \texttt{gate2/v3}). The reproduction script writes corrected Gate 2 artifacts under \texttt{outputs/public/gate2\_v4/}.
 Gate 1 is a unit-tested property of Gridworld v2: the train-map payoff matrix has at least three distinct best responses and no weakly dominant attacker row, and each of \texttt{evasive}, \texttt{feint}, and \texttt{patient} is uniquely best on a held-out layout.
 
 Table~\ref{tab:exact-nash} reports exact Nash values and scripted-strategy exploitability on every v2 layout.
@@ -133,7 +135,11 @@ Every named heuristic has exploitability $0.70$--$2.08$ because an exact best-re
 Gate 2 compares mixed attackers on exact exploitability over five seeds (Table~\ref{tab:gate2}).
 \texttt{outputs/public/gate2/summary.json} reports \texttt{passed: false}, \texttt{beats\_diversity\_only: true}, and \texttt{framing: diagnostic}.
 The EBM mixture is $1.573$ $[1.478,1.668]$: it separates from diversity-only ($1.762$) but not from softmax PPO ($1.598$).
-The Nash-oracle row has exploitability $0$ and held-out goal rate $0.96$, so a low-exploitability mixed attacker exists on this game.
+The Nash-oracle row has exploitability $0$, establishing that a low-exploitability mixed attacker exists on this game.
+The historical goal rates for EBM, buffer, and diversity-only use fixed-component rollouts.
+The other rows' historical goal rates use state-wise table rollouts.
+All goal rates use scripted defenders. Exact exploitability uses a minimizing best response.
+Corrected five-seed goal rates are recorded separately under schema \texttt{gate2/v4} and await review.
 The honest finding is that mass on low-energy latents does not yet concentrate on a low-exploitability mixture.
 
 \begin{table}[t]
@@ -156,12 +162,12 @@ Layout & $V_{\mathrm{Nash}}$ & Timeout & aggressive & evasive & feint & patient 
 
 \begin{table}[t]
 \centering
-\caption{Gate 2 five-seed exact exploitability of mixed attackers (lower is better). CIs are 95\%. Nash and uniform-random are reference rows.}
+\caption{October 19 Gate 2 results (five seeds). Exact exploitability uses Markov attacker tables and is lower-is-better, with 95\% CIs. The legacy held-out goal column uses scripted defenders. Rollouts fix a sampled component for EBM, buffer, and diversity-only and sample the attacker table state-wise for the other rows. Nash and uniform-random are reference rows.}
 \label{tab:gate2}
 \setlength{\tabcolsep}{3.5pt}
 \begin{tabular}{llrrrr}
 \toprule
-Method & Kind & Exploitability & Value vs BR & Held-out goal & Support \\
+Method & Kind & Exploitability & Value vs BR & Legacy goal & Support \\
 \midrule
 Nash oracle & ref. & $0.000$ & $0.746$ & $0.960$ & $1.0$ \\
 EBM mixture & primary & $1.573$ $[1.478,1.668]$ & $-1.027$ & $0.128$ & $15.9$ \\
@@ -182,12 +188,12 @@ Figures regenerated from the same artifacts: the v2 payoff heatmap, Gate 2 explo
 Exact exploitability is available on Gridworld v2 but expensive (about $1$--$6$\,s per candidate best response); the paper training config uses it for selection, while the ablation config keeps sampled $G$.
 The learned world model is not yet the best-response engine.
 PPO still times out against the scripted defender on v2, so the softmax baseline is a credible mixture but not a strong learner.
-A draw-once-per-episode mixture, self-play, and multi-evader pursuit are left to future work.
+Exact exploitability of draw-once-per-episode mixtures, self-play, and multi-evader pursuit are left to future work.
 
 \section{Reproducibility}
 
 The repository includes YAML experiment configs, unit and smoke tests, public JSON artifacts, figure scripts, an ablation runner, and a multi-seed protocol runner.
-Before submission, paper tables should be regenerated from the scripted outputs rather than copied from hand-written snapshots.
+Before submission, regenerate the paper tables from the scripted outputs. Label any corrected Gate 2 measurements with their protocol and retain the October 19 snapshot as the historical record.
 
 \bibliographystyle{plain}
 \bibliography{references}

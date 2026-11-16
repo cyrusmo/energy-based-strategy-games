@@ -40,6 +40,9 @@ from strategy_games.training.psro import PSROConfig, run_psro
 from strategy_games.training.train_loop import TrainingConfig, run_training_loop
 
 REFERENCE_METHODS = frozenset({"nash_oracle", "uniform_random"})
+_TABLE_GOAL_RATE = "heldout_table_goal_rate"
+_LEGACY_GOAL_RATE = "heldout_goal_rate"
+_DRAW_ONCE_GOAL_RATE = "heldout_draw_once_goal_rate"
 
 
 @dataclass(frozen=True)
@@ -53,7 +56,7 @@ class Gate2Config:
     candidate_strategies: int = 16
     mixture_k: int = 16
     mixture_goal_samples: int = 8
-    output_dir: Path = Path("outputs/public/gate2")
+    output_dir: Path = Path("outputs/public/gate2_v4")
 
 
 def run_gate2(config: Gate2Config | None = None) -> dict[str, Any]:
@@ -76,7 +79,14 @@ def run_gate2(config: Gate2Config | None = None) -> dict[str, Any]:
 
 
 def summarize_gate2(rows: list[dict[str, Any]]) -> dict[str, Any]:
-    """Mean/CI by method on exact exploitability (lower is better)."""
+    """Summarize corrected or historical rows from a single protocol."""
+
+    goal_fields = {_TABLE_GOAL_RATE, _LEGACY_GOAL_RATE}
+    row_goal_fields = {frozenset(goal_fields.intersection(row)) for row in rows}
+    if len(row_goal_fields) > 1 or any(len(fields) != 1 for fields in row_goal_fields):
+        raise ValueError("Gate 2 rows must use a single goal-rate protocol")
+    historical = row_goal_fields == {frozenset({_LEGACY_GOAL_RATE})}
+    goal_field = _LEGACY_GOAL_RATE if historical else _TABLE_GOAL_RATE
 
     methods = sorted({str(row["method"]) for row in rows})
     by_method: dict[str, dict[str, Any]] = {}
@@ -90,12 +100,15 @@ def summarize_gate2(rows: list[dict[str, Any]]) -> dict[str, Any]:
             "train_exploitability": _ci([float(row["train_exploitability"]) for row in method_rows]),
             "heldout_exploitability": _ci([float(row["heldout_exploitability"]) for row in method_rows]),
             "exact_value_vs_br": _ci([float(row["exact_value_vs_br"]) for row in method_rows]),
-            "heldout_goal_rate": _ci([float(row["heldout_goal_rate"]) for row in method_rows]),
+            goal_field: _ci([float(row[goal_field]) for row in method_rows]),
             "strategy_entropy": _ci([float(row.get("strategy_entropy", 0.0)) for row in method_rows]),
             "mixture_support": _ci([float(row.get("mixture_support", 0.0)) for row in method_rows]),
             "env_steps": _ci([float(row.get("env_steps", 0.0)) for row in method_rows]),
             "n": len(method_rows),
         }
+        draw_once = [float(row[_DRAW_ONCE_GOAL_RATE]) for row in method_rows if _DRAW_ONCE_GOAL_RATE in row]
+        if draw_once and not historical:
+            by_method[method][_DRAW_ONCE_GOAL_RATE] = {**_ci(draw_once), "n": len(draw_once)}
     full = by_method.get("strategy_loop")
     ppo = by_method.get("ppo_baseline")
     diversity = by_method.get("diversity_only")
@@ -103,7 +116,7 @@ def summarize_gate2(rows: list[dict[str, Any]]) -> dict[str, Any]:
     beats_div = _beats_lower(full, diversity, "exploitability")
     passed = bool(beats_ppo and beats_div)
     return {
-        "schema_version": "gate2/v3",
+        "schema_version": "gate2/v3" if historical else "gate2/v4",
         "methods": list(by_method.values()),
         "beats_ppo": beats_ppo,
         "beats_diversity_only": beats_div,
@@ -113,6 +126,14 @@ def summarize_gate2(rows: list[dict[str, Any]]) -> dict[str, Any]:
             "Primary metric is exact Nash exploitability of a Markov behavioral mixture (lower is better).",
             "Pass requires the strategy-loop 95% CI to lie entirely below both PPO and diversity-only.",
             "nash_oracle and uniform_random are reference rows and are excluded from the pass test.",
+            (
+                "Legacy heldout_goal_rate uses fixed-component sampling on component-based rows and "
+                "table rollouts on other rows."
+                if historical
+                else "heldout_table_goal_rate uses the exact evaluator's held-out attacker table "
+                "against scripted defenders, with one seeded episode per defender per layout. "
+                "heldout_draw_once_goal_rate is a separate fixed-component diagnostic."
+            ),
         ],
     }
 
@@ -280,16 +301,16 @@ def _row_from_table(
     train_exact = exact_metrics_for_policy(train, table=table)
     held_exact = []
     held_goal = []
+    held_draw_once = []
     held_by_layout: dict[str, float] = {}
     for name, env in heldout:
         held_table = _heldout_table(method, result, env, components, weights, cache)
         metrics = exact_metrics_for_policy(env, table=held_table)
         held_exact.append(float(metrics["exploitability"]))
         held_by_layout[name] = float(metrics["exploitability"])
+        held_goal.append(_table_goal_rate(env, held_table, seed=seed))
         if components and weights is not None:
-            held_goal.append(_mixture_goal_rate(env, components, weights, n_samples=goal_samples, seed=seed))
-        else:
-            held_goal.append(_table_goal_rate(env, held_table, seed=seed))
+            held_draw_once.append(_draw_once_goal_rate(env, components, weights, n_samples=goal_samples, seed=seed))
     all_exploit = [float(train_exact["exploitability"]), *held_exact]
     return {
         "method": method,
@@ -302,7 +323,8 @@ def _row_from_table(
         "exploitability": float(np.mean(all_exploit)),
         "exact_value_vs_br": float(train_exact["exact_value_vs_br"]),
         "exact_nash_value": float(train_exact["exact_nash_value"]),
-        "heldout_goal_rate": float(np.mean(held_goal) if held_goal else 0.0),
+        _TABLE_GOAL_RATE: float(np.mean(held_goal)) if held_goal else 0.0,
+        **({_DRAW_ONCE_GOAL_RATE: float(np.mean(held_draw_once))} if held_draw_once else {}),
         "final_selected_label": result.get("final_selected_label"),
         "strategy_entropy": float(result.get("strategy_entropy", 0.0)),
         "mixture_support": float(mixture_support),
@@ -466,13 +488,15 @@ def _policy_table(
     return table
 
 
-def _mixture_goal_rate(
+def _draw_once_goal_rate(
     env: Any,
     components: list[dict[str, Any]],
     weights: np.ndarray,
     n_samples: int = 8,
     seed: int = 0,
 ) -> float:
+    """Legacy diagnostic: each sampled component stays fixed throughout its rollouts."""
+
     if not components:
         return 0.0
     probs = np.asarray(weights, dtype=np.float64).reshape(-1)
@@ -501,6 +525,8 @@ def _mixture_goal_rate(
 
 
 def _table_goal_rate(config: Any, table: np.ndarray, seed: int = 0, episodes_per_opponent: int = 1) -> float:
+    """Sample the attacker table at each step against each scripted defender."""
+
     cells = [
         (y, x)
         for y in range(config.grid_size)
