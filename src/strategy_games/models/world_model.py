@@ -2,16 +2,18 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import torch
 from torch import Tensor, nn
 
 
 class LearnedWorldModel(nn.Module):
-    """Stub transition/reward model for future model-based evaluation.
+    """One-step transition/reward model with open-loop imagined rollouts.
 
-    The first scaffold uses true environment rollouts for evaluation. This
-    module provides a clean interface for later learned rollouts without
-    entangling the evaluator with a specific architecture.
+    Evaluation in this repository still uses true environment rollouts.
+    ``rollout`` composes one-step predictions; its accuracy against the
+    environment has not been measured, and it is not used for best response.
     """
 
     def __init__(self, state_dim: int, action_dim: int, strategy_dim: int, hidden_dim: int = 64) -> None:
@@ -39,8 +41,39 @@ class LearnedWorldModel(nn.Module):
         reward = self.reward_head(hidden).squeeze(-1)
         return delta, reward
 
-    def rollout(self, *args: object, **kwargs: object) -> None:
-        """Reserved for future model-based imaginary rollouts."""
+    @torch.no_grad()
+    def rollout(
+        self,
+        state: Tensor,
+        strategy: Tensor,
+        policy: Callable[[Tensor, Tensor], Tensor],
+        horizon: int,
+    ) -> tuple[Tensor, Tensor]:
+        """Imagine ``horizon`` steps from ``state`` under ``policy``.
 
-        del args, kwargs
-        raise NotImplementedError("LearnedWorldModel.rollout is a research TODO; use true environment rollouts for now.")
+        ``state`` is ``[batch, state_dim]`` and ``strategy`` is
+        ``[batch, strategy_dim]`` or a single vector. ``policy(state, strategy)``
+        returns integer actions of shape ``[batch]``. Returns the imagined states
+        ``[batch, horizon + 1, state_dim]`` and rewards ``[batch, horizon]``.
+
+        The model has no termination head, so rollouts always run the full
+        horizon; callers that need episode returns must truncate themselves.
+        """
+
+        if horizon < 1:
+            raise ValueError("horizon must be positive")
+        if state.ndim != 2 or state.shape[-1] != self.state_dim:
+            raise ValueError(f"state must have shape [batch, {self.state_dim}], got {tuple(state.shape)}")
+        strategy = strategy.float()
+        if strategy.ndim == 1:
+            strategy = strategy.unsqueeze(0).expand(state.shape[0], -1)
+        current = state.float()
+        states, rewards = [current], []
+        for _ in range(horizon):
+            action = policy(current, strategy).long()
+            one_hot = torch.nn.functional.one_hot(action, num_classes=self.action_dim).float()
+            delta, reward = self.forward(current, one_hot, strategy)
+            current = current + delta
+            states.append(current)
+            rewards.append(reward)
+        return torch.stack(states, dim=1), torch.stack(rewards, dim=1)

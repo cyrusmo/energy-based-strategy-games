@@ -30,9 +30,10 @@ from strategy_games.models.ebm import EnergyMLP
 from strategy_games.strategies.embeddings import available_heuristic_strategies, named_strategy_embedding
 
 STRATEGIES: tuple[str, ...] = available_heuristic_strategies()
-SCHEMA_VERSION = "energy_repair/v1"
+SCHEMA_VERSION = "energy_repair/v2"
 METHODS: tuple[str, ...] = ("energy_guided", "repair_only", "position_blind", "oracle_regret")
 FAULT_SCOPES: tuple[str, ...] = ("blanket", "selective")
+FLAG_SCOPES: tuple[str, ...] = ("global", "fault_layout")
 
 
 @dataclass(frozen=True)
@@ -51,6 +52,7 @@ class RepairConfig:
     evidence_frac: float = 0.1
     material_regret: float = 0.10
     flag_frac: float = 0.25
+    layout_flag_frac: float = 0.5
     search_steps: int = 40
     coords_per_step: int = 32
     preserve_weight: float = 3.0
@@ -326,6 +328,8 @@ def repair_search(
     cfg: RepairConfig,
     basis: Tensor | None = None,
     preserve: bool = True,
+    eligible: Tensor | None = None,
+    flag_frac: float | None = None,
 ) -> list[Tensor]:
     """Greedy sparse coordinate descent on decision energy. Returns the path.
 
@@ -333,12 +337,16 @@ def repair_search(
     None). Each step edits ``coords_per_step`` coordinates. With ``preserve``
     the coordinates are ranked by repair gain per unit sensitivity of the
     unflagged positions, and the step is charged (quadratically) for any energy
-    it adds there.
+    it adds there. ``eligible`` restricts which positions may be flagged; the
+    rest are always protected.
     """
 
     energy0 = decision_energy(theta0, x, guidance, shapes).detach()
+    frac = cfg.flag_frac if flag_frac is None else flag_frac
+    ranked = energy0 if eligible is None else energy0.masked_fill(~eligible, -float("inf"))
+    pool = energy0.numel() if eligible is None else int(eligible.sum())
     flagged = torch.zeros_like(energy0, dtype=torch.bool)
-    flagged[torch.topk(energy0, max(1, int(cfg.flag_frac * energy0.numel()))).indices] = True
+    flagged[torch.topk(ranked, max(1, int(frac * pool))).indices] = True
     calm = ~flagged
 
     def to_coords(vector: Tensor) -> Tensor:
@@ -446,6 +454,7 @@ def run_seed(
     fault_strategies: tuple[str, ...] = ("aggressive", "feint"),
     fault_scopes: tuple[str, ...] = FAULT_SCOPES,
     methods: tuple[str, ...] = METHODS,
+    flag_scopes: tuple[str, ...] = FLAG_SCOPES,
 ) -> dict[str, Any]:
     """Train selector and energy, plant each fault, run every repair arm."""
 
@@ -472,7 +481,8 @@ def run_seed(
         "energy_guided": learned_energy,
         "repair_only": learned_energy,
         "position_blind": blind_energy,
-        "oracle_regret": regret,
+        # Rescaled to the units the energy was trained in (return / temperature).
+        "oracle_regret": regret / cfg.energy_temperature,
     }
     rotation = random_rotation(clean_theta.numel(), seed + 20_000)
     fault_layout = seed % len(table.layout_names)
@@ -513,26 +523,32 @@ def run_seed(
                 "fault_strategy_rate_on_fault_layout": float(probs[on_fault_layout[held_out], k].mean()),
                 "arms": {},
             }
-            for coords, basis in (("original", None), ("rotated", rotation)):
-                for method in methods:
-                    path = repair_search(
-                        damaged,
-                        x[evidence],
-                        guidance[method][evidence],
-                        shapes,
-                        cfg,
-                        basis=basis,
-                        preserve=method != "repair_only",
-                    )
-                    entry["arms"][f"{coords}/{method}"] = path_metrics(
-                        path,
-                        x[held_out],
-                        returns[held_out],
-                        on_fault_layout[held_out],
-                        clean_theta,
-                        shapes,
-                        cfg.material_regret,
-                    )
+            for flag_scope in flag_scopes:
+                # "fault_layout" tells every method which layout is damaged, so
+                # flagging cannot spill onto the other layouts.
+                scoped = flag_scope == "fault_layout"
+                for coords, basis in (("original", None), ("rotated", rotation)):
+                    for method in methods:
+                        path = repair_search(
+                            damaged,
+                            x[evidence],
+                            guidance[method][evidence],
+                            shapes,
+                            cfg,
+                            basis=basis,
+                            preserve=method != "repair_only",
+                            eligible=on_fault_layout[evidence] if scoped else None,
+                            flag_frac=cfg.layout_flag_frac if scoped else None,
+                        )
+                        entry["arms"][f"{flag_scope}/{coords}/{method}"] = path_metrics(
+                            path,
+                            x[held_out],
+                            returns[held_out],
+                            on_fault_layout[held_out],
+                            clean_theta,
+                            shapes,
+                            cfg.material_regret,
+                        )
             result["faults"][f"{strategy}/{scope}"] = entry
     return result
 
@@ -607,14 +623,15 @@ def summary_markdown(summary: dict[str, Any]) -> str:
             f"(position-blind: {pct(det['blind_top_quarter'])}%). "
             f"AUROC {det['energy_auroc']['mean']:.3f} vs {det['blind_auroc']['mean']:.3f}.",
             "",
-            "| Coordinates | Method | Recovery % (pooled) | Peak harm % | Final harm % | Other-layout return change |",
-            "| --- | --- | ---: | ---: | ---: | ---: |",
+            "| Flagging | Coordinates | Method | Recovery % (pooled) | Peak harm % | Final harm % "
+            "| Other-layout return change |",
+            "| --- | --- | --- | ---: | ---: | ---: | ---: |",
         ]
         for arm, stats in entry["arms"].items():
-            coords, method = arm.split("/")
+            flag_scope, coords, method = arm.split("/")
             change = stats["other_layout_return_change"]
             lines.append(
-                f"| {coords} | `{method}` | {100 * stats['recovery_pooled']:.1f} | {pct(stats['peak_harm'])} | "
+                f"| {flag_scope} | {coords} | `{method}` | {100 * stats['recovery_pooled']:.1f} | {pct(stats['peak_harm'])} | "
                 f"{pct(stats['final_harm'])} | {change['mean']:+.4f} ± {change['ci95']:.4f} |"
             )
         lines.append("")

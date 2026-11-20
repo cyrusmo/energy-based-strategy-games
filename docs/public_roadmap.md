@@ -4,43 +4,34 @@ This repository is currently a research scaffold for early experiments in energy
 
 ## Current
 
-- Configurable attacker-defender gridworld
-- Named heuristic strategy embeddings
-- Energy MLP over strategy embeddings
-- Langevin sampler
-- Approximate sampled-response evaluator
-- Strategy buffer
-- Debug training loop with lightweight policy, EBM, and world-model updates
-- Heuristic-aligned strategy execution (evaluator and executor share an action source)
-- Public experiment logging
-- Rollout trace and path visualization
-- Baseline comparison harness
-- Named-strategy payoff matrix
-- Benchmark registry and runner for custom gridworld seed sweeps
-- Validated pursuit/evasion trace schema and custom multi-evader rollout viewer
-- Optional PettingZoo Pursuit adapter for transfer benchmarking
-- PPO baseline with potential-based shaping, longer default budget, and training diagnosis
-- Gridworld learning-study protocol with multi-seed curves and triage
-- Held-out grid layouts that expose direct-goal overfitting
-- Unit and smoke tests
+- Attacker-defender Gridworld v1 (kept for snapshot reproduction) and v2 (walls, two goals, held-out layouts)
+- Named heuristic strategy embeddings and a parametric continuous controller
+- Energy MLP over strategy embeddings with a Langevin sampler
+- Strategy buffer and the generate, evaluate, execute, update training loop
+- Exact Nash values, best responses and exploitability on Gridworld v2
+- Gate 1 (the v2 payoff matrix is a real game) as a unit-tested property
+- Gate 2 (mixed attackers on exact exploitability) with PPO, diversity-only and PSRO-lite baselines
+- Energy-guided weight-space repair pilot with repair-only, position-blind and rotated-coordinate controls
+- PPO baseline with potential-based shaping and training diagnosis
+- Learning-study and held-out layout protocols, ablation suite, multi-seed runner
+- One-step world model with open-loop imagined rollouts (not yet evaluated or used for best response)
+- Pursuit/evasion trace schema, multi-evader rollout viewer and optional PettingZoo Pursuit adapter
+- Public experiment logging, figures, unit and smoke tests
 
 ## Near Term
 
-- Interpret learning-study and held-out artifacts before expanding the method stack
-- Improve EBM training from buffer positives and sampler negatives if selected-strategy diversity collapses
-- Add richer rollout logging and visualization summaries
-- Add more pursuit trace fixtures and curated public demos
-- Add benchmark reports for seed sweeps without overclaiming performance
-- Add simple payoff-matrix experiments
+- Gate 2: make energy concentrate on a low-exploitability mixture (it is nearly flat over sampled latents)
+- Harden PPO on v2, where it still times out against the scripted defender
+- Repair pilot: train the energy without labels from the faulted layout, and plant faults in a selector with no layout-specific weights
+- Measure world-model rollout error against the environment before using it for evaluation
 
 ## Medium Term
 
-- Improve approximate best-response search
-- Add learned world-model rollouts
-- Add zero-shot transfer benchmarks beyond layout swaps
-- Add PSRO-style population comparisons
-- Add more interpretable strategy embedding visualizations
-- Compare strategy-conditioned PPO against unconditioned PPO
+- Use the world model as a best-response engine
+- Exact exploitability of draw-once-per-episode mixtures (belief-state DP)
+- Self-play
+- Zero-shot transfer benchmarks beyond layout swaps
+- Integrate latent strategy generation into multi-evader pursuit
 
 ## Long Term
 
@@ -48,4 +39,4 @@ This repository is currently a research scaffold for early experiments in energy
 - Study how energy-based latent strategy spaces interact with equilibrium-seeking evaluation
 - Compare model-free, model-based, and hybrid strategy evaluation pipelines
 
-This roadmap is intentionally conservative. Results should be reported only after reproducible experiments are implemented and reviewed. Medium-term items stay deferred until a learning method beats or clearly challenges direct-goal on held-out layouts.
+This roadmap is intentionally conservative. Results should be reported only after reproducible experiments are implemented and reviewed. Gate 2 currently fails, so the paper framing stays diagnostic.

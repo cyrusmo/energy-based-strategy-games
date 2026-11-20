@@ -96,16 +96,30 @@ def test_run_seed_and_aggregate_smoke(table: PositionTable) -> None:
     assert results[1]["fault_layout"] == "patient_hold"
     fault = results[0]["faults"]["aggressive/blanket"]
     assert set(fault["arms"]) == {
-        "original/energy_guided",
-        "original/position_blind",
-        "rotated/energy_guided",
-        "rotated/position_blind",
+        f"{flag}/{coords}/{method}"
+        for flag in ("global", "fault_layout")
+        for coords in ("original", "rotated")
+        for method in ("energy_guided", "position_blind")
     }
     # The planted fault must actually make the selector overuse the strategy.
     assert fault["fault_strategy_rate_on_fault_layout"] > 0.6
     for arm in fault["arms"].values():
         assert 0.0 <= arm["final_harm"] <= arm["peak_harm"] <= 1.0
     summary = aggregate(results, FAST)
-    assert summary["schema_version"] == "energy_repair/v1"
+    assert summary["schema_version"] == "energy_repair/v2"
     assert summary["num_seeds"] == 2
     assert "aggressive/selective" in summary_markdown(summary)
+
+
+def test_eligible_mask_restricts_flagging_and_protects_the_rest() -> None:
+    generator = torch.Generator().manual_seed(0)
+    shapes = selector_shapes(6, 8, 5)
+    theta = init_selector(shapes, generator)
+    x = torch.randn(64, 6, generator=generator)
+    guidance = torch.rand(64, 5, generator=generator)
+    eligible = torch.zeros(64, dtype=torch.bool)
+    eligible[:16] = True
+    path = repair_search(theta, x, guidance, shapes, FAST, eligible=eligible, flag_frac=0.5)
+    change = decision_energy(path[-1], x, guidance, shapes) - decision_energy(path[0], x, guidance, shapes)
+    assert change[:16].mean() < 0
+    assert change[:16].mean() < change[16:].mean()
