@@ -58,6 +58,7 @@ python examples/compute_payoff_matrix.py
 python examples/run_benchmarks.py --config configs/benchmarks/debug_suite.yaml
 python examples/run_learning_study.py --config configs/gridworld_learning_study.yaml
 python examples/run_heldout_layouts.py --config configs/gridworld_heldout_layouts.yaml
+python examples/run_energy_repair.py --seeds 20 --workers 4
 python examples/export_pursuit_trace.py --config configs/demo/custom_2_evader_9x9.yaml
 python examples/compare_pursuit_policies.py
 python examples/train_ppo_pursuer.py --config configs/demo/ppo_pursuer_smoke.yaml
