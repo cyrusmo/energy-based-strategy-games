@@ -21,7 +21,7 @@ This repository is currently a research scaffold for early experiments in energy
 ## Near Term
 
 - Gate 2: make energy concentrate on a low-exploitability mixture (it is nearly flat over sampled latents)
-- Harden PPO on v2, where it still times out against the scripted defender. Budget is not the cause: goal rate stays 0 at 131,072 steps. With shaping x10, entropy bonus 0.01 and learning rate 1e-3, three of five seeds reach goal rate 1.0 and two collapse to a timeout policy
+- PPO on v2: hardened settings (`configs/gridworld_v2_ppo_hardened.yaml`) reach the goal on 11 of 15 seeds; the rest stand off against the scripted defender. Rerun Gate 2 with this baseline, and try training against a mix of defenders
 - Repair pilot: train the energy without labels from the faulted layout, and plant faults in a selector with no layout-specific weights
 - Measure world-model rollout error against the environment before using it for evaluation
 
