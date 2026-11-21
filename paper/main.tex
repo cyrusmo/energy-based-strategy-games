@@ -125,7 +125,7 @@ The paper-facing ablation suite covers EBM versus Gaussian sampling, buffer posi
 
 \section{Results}
 
-Table~\ref{tab:gate2} reproduces the October 19, 2026 Gate 2 snapshot (schema \texttt{gate2/v3}). The reproduction script writes corrected Gate 2 artifacts under \texttt{outputs/public/gate2\_v4/}.
+Table~\ref{tab:gate2} reports the October 19, 2026 Gate 2 snapshot (schema \texttt{gate2/v3}) alongside the corrected goal rate from the November rerun (schema \texttt{gate2/v4}). The reproduction script writes corrected Gate 2 artifacts under \texttt{outputs/public/gate2\_v4/}.
 Gate 1 is a unit-tested property of Gridworld v2: the train-map payoff matrix has at least three distinct best responses and no weakly dominant attacker row, and each of \texttt{evasive}, \texttt{feint}, and \texttt{patient} is uniquely best on a held-out layout.
 
 Table~\ref{tab:exact-nash} reports exact Nash values and scripted-strategy exploitability on every v2 layout.
@@ -139,7 +139,8 @@ The Nash-oracle row has exploitability $0$, establishing that a low-exploitabili
 The historical goal rates for EBM, buffer, and diversity-only use fixed-component rollouts.
 The other rows' historical goal rates use state-wise table rollouts.
 All goal rates use scripted defenders. Exact exploitability uses a minimizing best response.
-Corrected five-seed goal rates are recorded separately under schema \texttt{gate2/v4} and await review.
+A five-seed rerun under the corrected protocol (schema \texttt{gate2/v4}, November 2026) reproduces every exploitability figure in Table~\ref{tab:gate2} and reproduces the historical goal rates of the three component-based rows as its draw-once diagnostic.
+Sampling the attacker table state-wise instead lowers those rows: the EBM mixture reaches a goal in $0.027$ of held-out rollouts (historically $0.128$), the buffer mixture in $0.213$ ($0.267$), and diversity-only in $0.280$ ($0.357$).
 The honest finding is that mass on low-energy latents does not yet concentrate on a low-exploitability mixture.
 
 \begin{table}[t]
@@ -162,21 +163,21 @@ Layout & $V_{\mathrm{Nash}}$ & Timeout & aggressive & evasive & feint & patient 
 
 \begin{table}[t]
 \centering
-\caption{October 19 Gate 2 results (five seeds). Exact exploitability uses Markov attacker tables and is lower-is-better, with 95\% CIs. The legacy held-out goal column uses scripted defenders. Rollouts fix a sampled component for EBM, buffer, and diversity-only and sample the attacker table state-wise for the other rows. Nash and uniform-random are reference rows.}
+\caption{Gate 2 results (five seeds). Exact exploitability uses Markov attacker tables and is lower-is-better, with 95\% CIs; the October 19 snapshot and the November \texttt{gate2/v4} rerun agree on it. Both held-out goal columns use scripted defenders. Table goal (\texttt{gate2/v4}) samples the attacker table state-wise for every row. Legacy goal (October 19) fixes a sampled component for EBM, buffer, and diversity-only and matches table sampling for the other rows. Nash and uniform-random are reference rows.}
 \label{tab:gate2}
 \setlength{\tabcolsep}{3.5pt}
-\begin{tabular}{llrrrr}
+\begin{tabular}{llrrrrr}
 \toprule
-Method & Kind & Exploitability & Value vs BR & Legacy goal & Support \\
+Method & Kind & Exploitability & Value vs BR & Table goal & Legacy goal & Support \\
 \midrule
-Nash oracle & ref. & $0.000$ & $0.746$ & $0.960$ & $1.0$ \\
-EBM mixture & primary & $1.573$ $[1.478,1.668]$ & $-1.027$ & $0.128$ & $15.9$ \\
-PPO softmax & baseline & $1.598$ $[1.567,1.630]$ & $-1.127$ & $0.000$ & $1.0$ \\
-PPO $\arg\max$ & continuity & $1.606$ & $-1.190$ & $0.000$ & $1.0$ \\
-Uniform random & ref. & $1.633$ & $-1.069$ & $0.000$ & $5.0$ \\
-Buffer mixture & secondary & $1.726$ $[1.724,1.727]$ & $-1.122$ & $0.267$ & $7.8$ \\
-Diversity-only & baseline & $1.762$ $[1.692,1.832]$ & $-1.128$ & $0.357$ & $7.1$ \\
-PSRO-lite & baseline & $1.811$ & $-1.200$ & $0.200$ & $1.0$ \\
+Nash oracle & ref. & $0.000$ & $0.746$ & $0.960$ & $0.960$ & $1.0$ \\
+EBM mixture & primary & $1.573$ $[1.478,1.668]$ & $-1.027$ & $0.027$ & $0.128$ & $15.9$ \\
+PPO softmax & baseline & $1.598$ $[1.567,1.630]$ & $-1.127$ & $0.000$ & $0.000$ & $1.0$ \\
+PPO $\arg\max$ & continuity & $1.606$ & $-1.190$ & $0.000$ & $0.000$ & $1.0$ \\
+Uniform random & ref. & $1.633$ & $-1.069$ & $0.000$ & $0.000$ & $5.0$ \\
+Buffer mixture & secondary & $1.726$ $[1.724,1.727]$ & $-1.122$ & $0.213$ & $0.267$ & $7.8$ \\
+Diversity-only & baseline & $1.762$ $[1.692,1.832]$ & $-1.128$ & $0.280$ & $0.357$ & $7.1$ \\
+PSRO-lite & baseline & $1.811$ & $-1.200$ & $0.200$ & $0.200$ & $1.0$ \\
 \bottomrule
 \end{tabular}
 \end{table}
