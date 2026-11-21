@@ -162,3 +162,25 @@ def _tiny_ppo_config() -> PPOConfig:
         eval_every_updates=0,
         env=GridworldConfig(grid_size=5, max_steps=8, defender_start=(4, 4), goal_pos=(4, 0)),
     )
+
+
+def test_random_start_prob_randomizes_v2_training_resets_only() -> None:
+    import numpy as np
+
+    from strategy_games.envs.gridworld_v2 import make_gridworld
+    from strategy_games.envs.layouts_v2 import get_layout_v2
+    from strategy_games.training.ppo_baseline import PPOConfig, _reset_for_training
+
+    layout = get_layout_v2("corridor_split")
+    env = make_gridworld(layout)
+    np.random.seed(0)
+    _reset_for_training(env, PPOConfig(env=layout))
+    assert (env.attacker_pos, env.defender_pos) == (layout.attacker_start, layout.defender_start)
+    starts = set()
+    for _ in range(20):
+        _reset_for_training(env, PPOConfig(env=layout, random_start_prob=1.0))
+        assert env.attacker_pos != env.defender_pos
+        assert env.attacker_pos not in layout.goal_positions
+        assert env.attacker_pos not in layout.obstacles and env.defender_pos not in layout.obstacles
+        starts.add((env.attacker_pos, env.defender_pos))
+    assert len(starts) > 5

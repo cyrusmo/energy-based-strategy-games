@@ -57,6 +57,7 @@ class PPOConfig:
     grad_clip_norm: float = 0.5
     reward_scale: float = 1.0
     shaping_coef: float = 1.0
+    random_start_prob: float = 0.0
     eval_episodes: int = 8
     eval_every_updates: int = 2
     device: str = "auto"
@@ -190,7 +191,7 @@ def train_ppo_baseline(config: PPOConfig | None = None) -> dict[str, Any]:
     )
     optimizer = torch.optim.Adam(policy.parameters(), lr=config.learning_rate)
 
-    observation = env.reset()
+    observation = _reset_for_training(env, config)
     running_episode_return = 0.0
     train_returns: list[float] = []
     train_outcomes: list[str] = []
@@ -340,7 +341,7 @@ def collect_ppo_rollout(
         if result.done:
             episode_returns.append(float(running_episode_return))
             episode_outcomes.append(str(result.info["outcome"]))
-            observation = env.reset()
+            observation = _reset_for_training(env, config)
             running_episode_return = 0.0
 
     return PPORolloutBatch(
@@ -532,6 +533,7 @@ def ppo_config_from_mapping(raw: Mapping[str, Any]) -> PPOConfig:
         grad_clip_norm=float(ppo_raw.get("grad_clip_norm", 0.5)),
         reward_scale=float(ppo_raw.get("reward_scale", 1.0)),
         shaping_coef=float(ppo_raw.get("shaping_coef", 1.0)),
+        random_start_prob=float(ppo_raw.get("random_start_prob", 0.0)),
         eval_episodes=int(ppo_raw.get("eval_episodes", 8)),
         eval_every_updates=int(ppo_raw.get("eval_every_updates", 2)),
         device=str(raw.get("device", ppo_raw.get("device", "auto"))),
@@ -624,12 +626,32 @@ def _validate_ppo_config(config: PPOConfig) -> None:
         raise ValueError("reward_scale must be positive")
     if config.shaping_coef < 0.0:
         raise ValueError("shaping_coef must be non-negative")
+    if not 0.0 <= config.random_start_prob <= 1.0:
+        raise ValueError("random_start_prob must be in [0, 1]")
 
 
 def _gridworld_config_from_mapping(raw: Mapping[str, Any]) -> GridworldConfig | GridworldV2Config:
     from strategy_games.envs.gridworld_v2 import env_config_from_mapping
 
     return env_config_from_mapping(dict(raw))
+
+
+def _reset_for_training(env: Any, config: PPOConfig) -> np.ndarray:
+    """Reset to the layout start, or with ``random_start_prob`` to random free cells.
+
+    Random starts are a training-time exploration aid on v2 only; evaluation
+    always uses the layout's own start.
+    """
+
+    if config.random_start_prob <= 0.0 or not is_v2_env(env) or np.random.random() >= config.random_start_prob:
+        return env.reset()
+    size = env.config.grid_size
+    cells = [(y, x) for y in range(size) for x in range(size) if (y, x) not in env.config.obstacles]
+    attacker_cells = [cell for cell in cells if cell not in env.config.goal_positions]
+    attacker = attacker_cells[np.random.randint(len(attacker_cells))]
+    defender_cells = [cell for cell in cells if cell != attacker]
+    defender = defender_cells[np.random.randint(len(defender_cells))]
+    return env.reset(attacker_pos=attacker, defender_pos=defender)
 
 
 def _env_potential(env: Any) -> float:
