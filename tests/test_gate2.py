@@ -139,3 +139,18 @@ def test_gate2_summary_rejects_mixed_goal_rate_definitions(same_row: bool) -> No
         del corrected["heldout_goal_rate"]
     with pytest.raises(ValueError, match="single goal-rate protocol"):
         summarize_gate2([legacy, corrected])
+
+
+def test_gate2_ppo_config_path_overrides_default_budget() -> None:
+    from pathlib import Path
+
+    from strategy_games.envs.layouts_v2 import TRAIN_LAYOUT_V2_NAME, get_layout_v2
+    from strategy_games.experiments.gate2 import Gate2Config, _ppo_config
+
+    train = get_layout_v2(TRAIN_LAYOUT_V2_NAME)
+    default = _ppo_config(Gate2Config(), 3, train)
+    assert (default.total_steps, default.random_start_prob, default.seed) == (4096, 0.0, 3)
+    hardened = _ppo_config(Gate2Config(ppo_config_path=Path("configs/gridworld_v2_ppo_hardened.yaml")), 3, train)
+    assert hardened.total_steps == 131072
+    assert hardened.random_start_prob == 0.5
+    assert hardened.seed == 3 and hardened.env == train

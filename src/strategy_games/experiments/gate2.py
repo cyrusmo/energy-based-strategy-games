@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -35,7 +35,7 @@ from strategy_games.experiments.diversity_baseline import run_diversity_baseline
 from strategy_games.experiments.logging import to_jsonable
 from strategy_games.strategies.embeddings import available_heuristic_strategies
 from strategy_games.strategies.sampler import langevin_sample
-from strategy_games.training.ppo_baseline import PPOConfig, train_ppo_baseline
+from strategy_games.training.ppo_baseline import PPOConfig, ppo_config_from_mapping, train_ppo_baseline
 from strategy_games.training.psro import PSROConfig, run_psro
 from strategy_games.training.train_loop import TrainingConfig, run_training_loop
 
@@ -52,6 +52,8 @@ class Gate2Config:
     seeds: tuple[int, ...] = (0, 1, 2, 3, 4)
     strategy_iterations: int = 8
     ppo_total_steps: int = 4096
+    # Optional YAML with PPO hyperparameters (including total_steps); overrides ppo_total_steps.
+    ppo_config_path: Path | None = None
     psro_iterations: int = 2
     candidate_strategies: int = 16
     mixture_k: int = 16
@@ -76,6 +78,17 @@ def run_gate2(config: Gate2Config | None = None) -> dict[str, Any]:
     summary = summarize_gate2(rows)
     artifacts = _write(config.output_dir, rows, summary, curves)
     return {"rows": rows, "summary": summary, "curves": curves, "artifacts": artifacts}
+
+
+def _ppo_config(config: Gate2Config, seed: int, train: Any) -> PPOConfig:
+    """PPO baseline settings: the 4,096-step default, or the given YAML."""
+
+    if config.ppo_config_path is None:
+        return PPOConfig(seed=seed, total_steps=config.ppo_total_steps, env=train, eval_episodes=2, eval_every_updates=0)
+    from strategy_games.utils.config import load_config
+
+    base = ppo_config_from_mapping(load_config(config.ppo_config_path))
+    return replace(base, seed=seed, env=train, eval_episodes=2, eval_every_updates=0)
 
 
 def summarize_gate2(rows: list[dict[str, Any]]) -> dict[str, Any]:
@@ -164,9 +177,7 @@ def _seed_rows(
         )
     )
     diversity = run_diversity_baseline(env=train, seed=seed, iterations=config.strategy_iterations)
-    ppo = train_ppo_baseline(
-        PPOConfig(seed=seed, total_steps=config.ppo_total_steps, env=train, eval_episodes=2, eval_every_updates=0)
-    )
+    ppo = train_ppo_baseline(_ppo_config(config, seed, train))
     psro = run_psro(PSROConfig(env=train, iterations=config.psro_iterations, seed=seed))
 
     ebm_mix = _ebm_mixture(strategy, train, k=config.mixture_k, cache=cache)
