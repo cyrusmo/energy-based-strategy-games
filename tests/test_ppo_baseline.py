@@ -184,3 +184,35 @@ def test_random_start_prob_randomizes_v2_training_resets_only() -> None:
         assert env.attacker_pos not in layout.obstacles and env.defender_pos not in layout.obstacles
         starts.add((env.attacker_pos, env.defender_pos))
     assert len(starts) > 5
+
+
+def test_entropy_schedule_is_linear_and_optional() -> None:
+    from strategy_games.training.ppo_baseline import PPOConfig, entropy_coef_at
+
+    constant = PPOConfig(total_steps=1000, entropy_coef=0.05)
+    assert entropy_coef_at(constant, 0) == entropy_coef_at(constant, 1000) == 0.05
+    annealed = PPOConfig(total_steps=1000, entropy_coef=0.05, entropy_coef_final=0.01)
+    assert entropy_coef_at(annealed, 0) == 0.05
+    assert abs(entropy_coef_at(annealed, 500) - 0.03) < 1e-9
+    assert abs(entropy_coef_at(annealed, 5000) - 0.01) < 1e-9
+
+
+def test_progress_shaping_rewards_progress_and_not_standing_still() -> None:
+    from strategy_games.envs.gridworld_v2 import make_gridworld
+    from strategy_games.envs.layouts_v2 import get_layout_v2
+    from strategy_games.training.ppo_baseline import PPOConfig, _shaping_potential
+
+    layout = get_layout_v2("corridor_split")
+    env = make_gridworld(layout)
+    env.reset()
+    legacy = PPOConfig(env=layout)
+    progress = PPOConfig(env=layout, shaping_mode="progress")
+    phi_legacy = _shaping_potential(env, legacy)
+    phi_progress = _shaping_potential(env, progress)
+    # Standing still: gamma * phi - phi is positive under legacy, negative under progress.
+    assert legacy.gamma * phi_legacy - phi_legacy > 0
+    assert progress.gamma * phi_progress - phi_progress < 0
+    assert 0.0 <= phi_progress <= 1.0
+    # One step toward the nearest goal raises the progress potential by 1/12.
+    env.reset(attacker_pos=(1, 0))
+    assert abs(_shaping_potential(env, progress) - phi_progress - 1.0 / 12.0) < 1e-9

@@ -31,7 +31,7 @@ from strategy_games.envs.gridworld_v2 import (
     is_v2_env,
     make_gridworld,
 )
-from strategy_games.envs.pathfinding import bfs_first_action, nearest_goal
+from strategy_games.envs.pathfinding import bfs_distance, bfs_first_action, nearest_goal
 from strategy_games.models.policy import RandomPolicy
 from strategy_games.utils.config import load_config
 from strategy_games.utils.device import resolve_device
@@ -58,6 +58,8 @@ class PPOConfig:
     reward_scale: float = 1.0
     shaping_coef: float = 1.0
     random_start_prob: float = 0.0
+    shaping_mode: str = "legacy"
+    entropy_coef_final: float | None = None
     eval_episodes: int = 8
     eval_every_updates: int = 2
     device: str = "auto"
@@ -224,7 +226,8 @@ def train_ppo_baseline(config: PPOConfig | None = None) -> dict[str, Any]:
             gamma=config.gamma,
             gae_lambda=config.gae_lambda,
         )
-        last_update = update_ppo_policy(policy, optimizer, batch, returns, advantages, config)
+        entropy_coef = entropy_coef_at(config, steps_done)
+        last_update = update_ppo_policy(policy, optimizer, batch, returns, advantages, config, entropy_coef)
         steps_done += steps_this_batch
         updates += 1
         train_goal_rate = (
@@ -266,6 +269,9 @@ def train_ppo_baseline(config: PPOConfig | None = None) -> dict[str, Any]:
         "shaping_coef": float(config.shaping_coef),
         "reward_scale": float(config.reward_scale),
         "entropy_coef": float(config.entropy_coef),
+        "entropy_coef_final": None if config.entropy_coef_final is None else float(config.entropy_coef_final),
+        "shaping_mode": config.shaping_mode,
+        "random_start_prob": float(config.random_start_prob),
         "learning_rate": float(config.learning_rate),
     }
     result["diagnosis"] = diagnose_ppo_training(result, config)
@@ -322,9 +328,11 @@ def collect_ppo_rollout(
             action = distribution.sample()
             log_prob = distribution.log_prob(action).squeeze(0)
 
-        phi_before = _env_potential(env)
+        phi_before = _shaping_potential(env, config)
         result = env.step(int(action.item()))
-        phi_after = _env_potential(env)
+        phi_after = _shaping_potential(env, config)
+        if config.shaping_mode == "progress" and result.done:
+            phi_after = 0.0
         shaped_reward = float(result.reward) + config.shaping_coef * (config.gamma * phi_after - phi_before)
         shaped_reward *= config.reward_scale
         running_episode_return += float(result.reward)
@@ -443,8 +451,11 @@ def update_ppo_policy(
     returns: Tensor,
     advantages: Tensor,
     config: PPOConfig,
+    entropy_coef: float | None = None,
 ) -> dict[str, float]:
     """Run PPO minibatch updates over one rollout batch."""
+
+    entropy_coef = config.entropy_coef if entropy_coef is None else entropy_coef
 
     batch_size = batch.states.shape[0]
     minibatch_size = min(config.minibatch_size, batch_size)
@@ -461,7 +472,7 @@ def update_ppo_policy(
                 advantages=advantages[indices],
                 clip_range=config.clip_range,
                 value_coef=config.value_coef,
-                entropy_coef=config.entropy_coef,
+                entropy_coef=entropy_coef,
             )
             optimizer.zero_grad()
             loss.backward()
@@ -534,6 +545,10 @@ def ppo_config_from_mapping(raw: Mapping[str, Any]) -> PPOConfig:
         reward_scale=float(ppo_raw.get("reward_scale", 1.0)),
         shaping_coef=float(ppo_raw.get("shaping_coef", 1.0)),
         random_start_prob=float(ppo_raw.get("random_start_prob", 0.0)),
+        shaping_mode=str(ppo_raw.get("shaping_mode", "legacy")),
+        entropy_coef_final=(
+            None if ppo_raw.get("entropy_coef_final") is None else float(ppo_raw["entropy_coef_final"])
+        ),
         eval_episodes=int(ppo_raw.get("eval_episodes", 8)),
         eval_every_updates=int(ppo_raw.get("eval_every_updates", 2)),
         device=str(raw.get("device", ppo_raw.get("device", "auto"))),
@@ -588,6 +603,9 @@ def diagnose_ppo_training(result: Mapping[str, Any], config: PPOConfig) -> dict[
         "shaping_coef": float(config.shaping_coef),
         "reward_scale": float(config.reward_scale),
         "entropy_coef": float(config.entropy_coef),
+        "entropy_coef_final": None if config.entropy_coef_final is None else float(config.entropy_coef_final),
+        "shaping_mode": config.shaping_mode,
+        "random_start_prob": float(config.random_start_prob),
         "learning_rate": float(config.learning_rate),
         "total_steps": int(config.total_steps),
     }
@@ -628,6 +646,10 @@ def _validate_ppo_config(config: PPOConfig) -> None:
         raise ValueError("shaping_coef must be non-negative")
     if not 0.0 <= config.random_start_prob <= 1.0:
         raise ValueError("random_start_prob must be in [0, 1]")
+    if config.shaping_mode not in {"legacy", "progress"}:
+        raise ValueError("shaping_mode must be 'legacy' or 'progress'")
+    if config.entropy_coef_final is not None and config.entropy_coef_final < 0.0:
+        raise ValueError("entropy_coef_final must be non-negative")
 
 
 def _gridworld_config_from_mapping(raw: Mapping[str, Any]) -> GridworldConfig | GridworldV2Config:
@@ -652,6 +674,38 @@ def _reset_for_training(env: Any, config: PPOConfig) -> np.ndarray:
     defender_cells = [cell for cell in cells if cell != attacker]
     defender = defender_cells[np.random.randint(len(defender_cells))]
     return env.reset(attacker_pos=attacker, defender_pos=defender)
+
+
+def entropy_coef_at(config: PPOConfig, steps_done: int) -> float:
+    """Entropy bonus at ``steps_done``: constant, or linear to ``entropy_coef_final``."""
+
+    if config.entropy_coef_final is None:
+        return float(config.entropy_coef)
+    frac = min(1.0, max(0.0, steps_done / max(1, config.total_steps)))
+    return float(config.entropy_coef + frac * (config.entropy_coef_final - config.entropy_coef))
+
+
+def _shaping_potential(env: Any, config: PPOConfig) -> float:
+    """Potential used for reward shaping.
+
+    ``legacy`` is the original potential: minus goal distance over the cell
+    count. It is non-positive, so with ``gamma < 1`` standing still far from a
+    goal earns a small positive shaped reward, and a step of progress is worth
+    only about ``1 / grid_size**2``.
+
+    ``progress`` (v2 only) is ``1 - distance / (2 * (grid_size - 1))`` clipped
+    to ``[0, 1]`` and treated as zero at terminal states by the caller. It is
+    non-negative, so standing still costs a little, and a step of progress is
+    worth about ``1 / 12`` on the 7x7 grid.
+    """
+
+    if config.shaping_mode == "legacy" or not is_v2_env(env):
+        return _env_potential(env)
+    nearest = nearest_goal(env.attacker_pos, env.goal_positions, env.config.grid_size, env.obstacles)
+    dist = bfs_distance(env.attacker_pos, nearest, env.config.grid_size, env.obstacles)
+    if dist is None:
+        return 0.0
+    return max(0.0, 1.0 - float(dist) / float(2 * (env.config.grid_size - 1)))
 
 
 def _env_potential(env: Any) -> float:
