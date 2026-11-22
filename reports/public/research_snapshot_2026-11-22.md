@@ -87,11 +87,41 @@ Gate flags:
   a mix of defenders or by self-play has not been run and is the fairer
   robust baseline.
 
+## Follow-up: seeded mixture sampling
+
+The EBM mixture is now sampled on its own random stream, seeded per model and
+draw, and leaves the global stream untouched. Rerun with the default
+4,096-step PPO: `python examples/run_gate2.py --seeds 5 --mixture-draws 8`.
+Every other row reproduces the earlier values exactly.
+
+| EBM mixture | Exploitability, mean [95% CI over 5 seeds] |
+| --- | ---: |
+| October figure (draw tied to PPO's random state) | 1.573 [1.478, 1.668] |
+| One seeded draw per model (the reported row) | 1.598 [1.499, 1.697] |
+| Mean of 8 draws per model | 1.584 [1.563, 1.604] |
+
+| Seed | Reported draw | Mean of 8 | Std over draws | Min | Max |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 0 | 1.624 | 1.595 | 0.071 | 1.470 | 1.677 |
+| 1 | 1.656 | 1.566 | 0.078 | 1.436 | 1.656 |
+| 2 | 1.679 | 1.598 | 0.100 | 1.441 | 1.679 |
+| 3 | 1.491 | 1.594 | 0.088 | 1.491 | 1.746 |
+| 4 | 1.540 | 1.566 | 0.074 | 1.469 | 1.681 |
+
+- Gate 2 still fails. With the seeded single draw, the EBM row separates from
+  neither PPO (1.598 [1.567, 1.630]) nor diversity-only (1.762 [1.692, 1.832]).
+- Almost all the spread is the sampling draw, not the trained model: the
+  per-model means differ by 0.03 across seeds, single draws by 0.3.
+- On the mean over draws, the EBM mixture is below diversity-only and uniform
+  random (1.633) with separate intervals, and still not below PPO.
+- Held-out table goal rate for the seeded draw is 0.000 (was 0.027).
+- The other draws report exploitability only; goal rates and value against the
+  best response come from the reported draw.
+
 ## Next
 
-- Seed the mixture sampling independently of the other baselines, and report
-  the EBM row as a mean over many draws per trained model. This changes the
-  headline EBM figure in the paper, so it needs a decision before it is done.
+- Decide whether the paper's EBM row should be the mean over draws instead of
+  one seeded draw. The mean is the stabler figure.
 - Report both PPO baselines in the paper table, or state plainly that the
   PPO row is a near-uniform 4,096-step policy.
 - PPO against a mix of scripted defenders.
