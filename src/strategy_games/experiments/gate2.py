@@ -58,6 +58,9 @@ class Gate2Config:
     candidate_strategies: int = 16
     mixture_k: int = 16
     mixture_goal_samples: int = 8
+    # Independent sampling draws of the EBM mixture per trained model. Draw 0 is the
+    # reported row; the others only feed the per-draw exploitability spread.
+    mixture_draws: int = 1
     output_dir: Path = Path("outputs/public/gate2_v4")
 
 
@@ -180,7 +183,7 @@ def _seed_rows(
     ppo = train_ppo_baseline(_ppo_config(config, seed, train))
     psro = run_psro(PSROConfig(env=train, iterations=config.psro_iterations, seed=seed))
 
-    ebm_mix = _ebm_mixture(strategy, train, k=config.mixture_k, cache=cache)
+    ebm_mix = _ebm_mixture(strategy, train, k=config.mixture_k, cache=cache, seed=_mixture_seed(seed, 0))
     buffer_mix = _buffer_mixture(strategy, train, cache=cache)
     diversity_mix = _buffer_mixture(diversity, train, cache=cache)
     ppo_stoch = _policy_table(train, stochastic_policy_from_actor_critic(ppo["_policy"]), cache, "ppo_stoch")
@@ -291,6 +294,14 @@ def _seed_rows(
             cache=cache,
         ),
     ]
+    if config.mixture_draws > 1:
+        draws = [rows[0]["exploitability"]]
+        for draw in range(1, config.mixture_draws):
+            mix = _ebm_mixture(strategy, train, k=config.mixture_k, cache=cache, seed=_mixture_seed(seed, draw))
+            draws.append(_mixture_exploitability(train, heldout, mix, cache))
+        rows[0]["draw_exploitability"] = draws
+        rows[0]["draw_exploitability_mean"] = float(np.mean(draws))
+        rows[0]["draw_exploitability_std"] = float(np.std(draws, ddof=1))
     curves = _buffer_curves(strategy, train, seed, cache)
     return rows, curves
 
@@ -368,25 +379,60 @@ def _heldout_table(
     return uniform_random_table(env)
 
 
+def _mixture_seed(seed: int, draw: int) -> int:
+    return 7_919 * (seed + 1) + 104_729 * draw
+
+
+def _mixture_exploitability(
+    train: Any,
+    heldout: list[tuple[str, Any]],
+    mix: dict[str, Any],
+    cache: dict[tuple[int, str], np.ndarray],
+) -> float:
+    """Mean exact exploitability over the train and held-out layouts, as in ``_row_from_table``."""
+
+    values = [float(exact_metrics_for_policy(train, table=mix["table"])["exploitability"])]
+    for _, env in heldout:
+        tables = [_component_table(env, item, cache) for item in mix["components"]]
+        table = mixture_table(tables, mix["weights"])
+        values.append(float(exact_metrics_for_policy(env, table=table)["exploitability"]))
+    return float(np.mean(values))
+
+
 def _ebm_mixture(
     result: dict[str, Any],
     config: Any,
     k: int,
     cache: dict[tuple[int, str], np.ndarray],
+    seed: int | None = None,
 ) -> dict[str, Any]:
+    """Sample a mixture from the trained energy model.
+
+    With ``seed`` set, sampling uses its own random stream and leaves the global
+    one untouched, so the mixture does not depend on what ran before it (the PPO
+    baseline's budget used to change it).
+    """
+
     ebm = result.get("_ebm")
     if ebm is None:
         return _buffer_mixture(result, config, cache=cache)
     device = next(ebm.parameters()).device
-    samples = langevin_sample(
-        ebm,
-        num_samples=k,
-        strategy_dim=samples_dim(ebm),
-        steps=10,
-        step_size=0.02,
-        noise_scale=0.25,
-        device=device,
-    )
+    state = torch.get_rng_state() if seed is not None else None
+    if seed is not None:
+        torch.manual_seed(seed)
+    try:
+        samples = langevin_sample(
+            ebm,
+            num_samples=k,
+            strategy_dim=samples_dim(ebm),
+            steps=10,
+            step_size=0.02,
+            noise_scale=0.25,
+            device=device,
+        )
+    finally:
+        if state is not None:
+            torch.set_rng_state(state)
     energies = ebm(samples).detach().cpu().numpy()
     weights = _softmax(-energies)
     components = []

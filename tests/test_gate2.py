@@ -154,3 +154,24 @@ def test_gate2_ppo_config_path_overrides_default_budget() -> None:
     assert hardened.total_steps == 131072
     assert hardened.random_start_prob == 0.5
     assert hardened.seed == 3 and hardened.env == train
+
+
+def test_gate2_ebm_mixture_sampling_is_seeded_and_isolated(monkeypatch: pytest.MonkeyPatch) -> None:
+    ebm = torch.nn.Sequential(torch.nn.Linear(8, 4), torch.nn.Tanh(), torch.nn.Linear(4, 1))
+    monkeypatch.setattr(gate2, "_component_table", lambda config, item, cache: np.zeros((1, 1)))
+    monkeypatch.setattr(gate2, "mixture_table", lambda tables, weights: np.zeros((1, 1)))
+
+    def embeddings(seed: int | None) -> torch.Tensor:
+        mix = gate2._ebm_mixture({"_ebm": ebm}, None, k=4, cache={}, seed=seed)
+        return torch.stack([item["embedding"] for item in mix["components"]])
+
+    torch.manual_seed(0)
+    first = embeddings(11)
+    after_first = torch.rand(1)
+    torch.manual_seed(123)
+    torch.rand(50)  # A different amount of prior random use, as a longer PPO run would cause.
+    assert torch.equal(embeddings(11), first)
+    assert not torch.equal(embeddings(12), first)
+    # Seeded sampling leaves the global stream where it found it.
+    torch.manual_seed(0)
+    assert torch.equal(torch.rand(1), after_first)

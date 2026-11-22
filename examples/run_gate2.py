@@ -14,6 +14,9 @@ def main() -> None:
     parser.add_argument("--strategy-iterations", type=int, default=8)
     parser.add_argument("--ppo-total-steps", type=int, default=4096)
     parser.add_argument("--ppo-config", type=Path, default=None, help="PPO YAML; overrides --ppo-total-steps.")
+    parser.add_argument(
+        "--mixture-draws", type=int, default=1, help="EBM mixture draws per model; extra draws report sampling spread."
+    )
     parser.add_argument("--output-dir", type=Path, default=Gate2Config.output_dir)
     args = parser.parse_args()
     result = run_gate2(
@@ -22,6 +25,7 @@ def main() -> None:
             strategy_iterations=args.strategy_iterations,
             ppo_total_steps=args.ppo_total_steps,
             ppo_config_path=args.ppo_config,
+            mixture_draws=args.mixture_draws,
             output_dir=args.output_dir,
         )
     )
