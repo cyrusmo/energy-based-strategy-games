@@ -84,6 +84,8 @@ held-out and Gate 2 numbers in the paper are unaffected.
 
 ## Next
 
-- Rerun Gate 2 with the hardened baseline.
+- Gate 2 was rerun with the hardened baseline on 2026-11-22; see
+  `research_snapshot_2026-11-22.md`. The hardened policy is more exploitable
+  (1.768 against 1.598).
 - Train against a mix of scripted defenders, which removes the single
   standoff this defender creates.

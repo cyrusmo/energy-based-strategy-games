@@ -21,7 +21,8 @@ This repository is currently a research scaffold for early experiments in energy
 ## Near Term
 
 - Gate 2: make energy concentrate on a low-exploitability mixture (it is nearly flat over sampled latents)
-- PPO on v2: hardened settings (`configs/gridworld_v2_ppo_hardened.yaml`) reach the goal on 11 of 15 seeds; the rest stand off against the scripted defender. Rerun Gate 2 with this baseline, and try training against a mix of defenders
+- Gate 2: the EBM mixture row depends on the random state left by the PPO baseline (per-seed swings up to 0.26). Seed its sampling separately and average over many draws
+- PPO on v2: hardened settings (`configs/gridworld_v2_ppo_hardened.yaml`) reach the goal on 11 of 15 seeds; the rest stand off against the scripted defender. In Gate 2 this policy is more exploitable than the 4,096-step one (1.768 against 1.598). Try training against a mix of defenders
 - Repair pilot: train the energy without labels from the faulted layout, and plant faults in a selector with no layout-specific weights
 - Measure world-model rollout error against the environment before using it for evaluation
 
